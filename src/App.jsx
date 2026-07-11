@@ -4,6 +4,7 @@ import {
   CheckCircle2, ScanLine, Youtube, Quote, ArrowRight, Sparkles, Plus, Check, Clock, Globe2
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { fetchRawCards } from './supabaseClient.js';
 
 /* ---------------------------------------------------------
    Design tokens
@@ -286,6 +287,53 @@ function ComingSoonView({ label }) {
   );
 }
 
+// Vista temporanea, solo per controllare che il database vero sia
+// collegato — mostra i dati grezzi così come arrivano, senza vestirli
+// con la grafica delle altre schermate (quelle restano sui dati finti
+// finché non decidiamo insieme come unire le due cose).
+function DbTestView() {
+  const [state, setState] = useState({ status: 'loading', cards: [], prices: [], error: null });
+  useEffect(() => {
+    fetchRawCards()
+      .then(({ cards, prices }) => setState({ status: 'ok', cards, prices, error: null }))
+      .catch((error) => setState({ status: 'error', cards: [], prices: [], error: error.message || String(error) }));
+  }, []);
+
+  return (
+    <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
+      <GridTexture />
+      <div style={{ position: 'relative', padding: '18px 16px 90px' }}>
+        <TopBar title="Test database" subtitle="dati reali, non ancora vestiti" />
+        {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 13, marginTop: 30, textAlign: 'center' }}>Sto leggendo dal database...</div>}
+        {state.status === 'error' && (
+          <div className="tk-body" style={{ color: C.vermillion, fontSize: 12.5, marginTop: 30, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 14, lineHeight: 1.5 }}>
+            Qualcosa non ha funzionato: <br /><span className="tk-mono" style={{ fontSize: 11 }}>{state.error}</span>
+          </div>
+        )}
+        {state.status === 'ok' && (
+          <div style={{ marginTop: 16 }}>
+            <div className="tk-body" style={{ color: C.jade, fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
+              Collegato! {state.cards.length} carte, {state.prices.length} prezzi trovati.
+            </div>
+            {state.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Il database risponde ma è vuoto — manca ancora l'INSERT di prova (o i dati veri).</div>}
+            {state.cards.map((c) => (
+              <div key={c.tcgdex_id} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                <div className="tk-body" style={{ color: C.paper, fontWeight: 600, fontSize: 13 }}>{c.name} {c.name_en && `(${c.name_en})`}</div>
+                <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 2 }}>{c.set_name} · {c.rarity} · {c.lang}</div>
+                {state.prices.filter((p) => p.tcgdex_id === c.tcgdex_id).map((p) => (
+                  <div key={p.id} className="tk-mono" style={{ color: C.gold, fontSize: 12, marginTop: 6 }}>
+                    {p.source} · {p.grade_company ?? 'raw'} {p.grade ?? ''} · {p.price} {p.currency}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
   const total = collection.reduce((sum, entry) => {
     const card = CARDS.find((c) => c.id === entry.cardId);
@@ -492,7 +540,7 @@ function DetailView({ card, onBack, currency, setCurrency, collection, toggleCol
 }
 
 function BottomNav({ view, onNav }) {
-  const items = [{ k: 'home', icon: Home, label: 'Home' }, { k: 'browse', icon: Search, label: 'Cerca' }, { k: 'portfolio', icon: Wallet, label: 'Portfolio' }, { k: 'profile', icon: User, label: 'Profilo' }];
+  const items = [{ k: 'home', icon: Home, label: 'Home' }, { k: 'browse', icon: Search, label: 'Cerca' }, { k: 'portfolio', icon: Wallet, label: 'Portfolio' }, { k: 'profile', icon: User, label: 'Test DB' }];
   return (
     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: C.ink, borderTop: `1px solid ${C.line}`, display: 'flex', padding: '10px 6px 14px' }}>
       {items.map((it) => { const active = view === it.k; return (
@@ -552,7 +600,7 @@ export default function TorekaPrototype() {
   else if (view === 'detail') screen = <DetailView key={selected?.id} card={selected} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'article') screen = <ArticleView key={article?.id} item={article} onBack={() => setView(navKey)} />;
   else if (view === 'portfolio') screen = <PortfolioView collection={collection} onRemove={(i) => persistCollection(collection.filter((_, idx) => idx !== i))} onOpenCard={openCard} currency={currency} />;
-  else screen = <ComingSoonView label="Il profilo" />;
+  else screen = <DbTestView />;
 
   return (
     <div className="tk-body" style={{ minHeight: '100vh', background: '#0B0A08', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 12px' }}>
