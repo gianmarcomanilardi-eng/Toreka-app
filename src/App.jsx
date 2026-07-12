@@ -496,68 +496,86 @@ function TextScanMode({ onDetected, certInfo }) {
   async function readWithGemini(base64Image) {
     const key = 'AQ.Ab8RN6KFBAn5mYJwnFONdLN0QArkZJRRoUFRnhcIkpNHvfbUcw'; // chiave Gemini
     if (!key) return null;
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
-            { text: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.' },
-          ],
-        }],
-      }),
-    });
-    const json = await resp.json();
-    return json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    try {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
+              { text: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.' },
+            ],
+          }],
+        }),
+      });
+      if (!resp.ok) return null; // errore vero (es. chiave sbagliata): passa al motore dopo, non fermarti qui
+      const json = await resp.json();
+      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      return typeof text === 'string' ? text : null;
+    } catch (e) { return null; }
   }
 
   async function readWithClaude(base64Image) {
     const key = ''; // <- incolla qui la tua chiave API Anthropic, quando l'hai
     if (!key) return null;
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 50,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Image } },
-            { type: 'text', text: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.' },
-          ],
-        }],
-      }),
-    });
-    const json = await resp.json();
-    return json?.content?.[0]?.text || '';
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 50,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Image } },
+              { type: 'text', text: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.' },
+            ],
+          }],
+        }),
+      });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      const text = json?.content?.[0]?.text;
+      return typeof text === 'string' ? text : null;
+    } catch (e) { return null; }
   }
 
   async function readWithOcrSpace(base64Image) {
     const key = 'K84416916188957'; // chiave OCR.space
     if (!key) return null;
-    const form = new FormData();
-    form.append('apikey', key);
-    form.append('base64Image', `data:image/jpeg;base64,${base64Image}`);
-    form.append('OCREngine', '3'); // il più adatto a cifre singole e sfondi difficili (es. l'argentato BGS)
-    form.append('scale', 'true'); // ingrandimento interno, utile su foto piccole
-    form.append('detectOrientation', 'true'); // ruota da sola il testo in verticale (serve per TAG)
-    const resp = await fetch('https://api.ocr.space/parse/image', { method: 'POST', body: form });
-    const json = await resp.json();
-    return json?.ParsedResults?.[0]?.ParsedText || '';
+    try {
+      const form = new FormData();
+      form.append('apikey', key);
+      form.append('base64Image', `data:image/jpeg;base64,${base64Image}`);
+      form.append('OCREngine', '3'); // il più adatto a cifre singole e sfondi difficili (es. l'argentato BGS)
+      form.append('scale', 'true'); // ingrandimento interno, utile su foto piccole
+      form.append('detectOrientation', 'true'); // ruota da sola il testo in verticale (serve per TAG)
+      const resp = await fetch('https://api.ocr.space/parse/image', { method: 'POST', body: form });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      if (json?.IsErroredOnProcessing) return null; // OCR.space segnala l'errore così, non con lo status HTTP
+      const text = json?.ParsedResults?.[0]?.ParsedText;
+      return typeof text === 'string' ? text : null;
+    } catch (e) { return null; }
   }
 
   async function readWithGoogleVision(base64Image) {
     const key = ''; // <- incolla qui la tua chiave Google Cloud Vision, quando l'hai
     if (!key) return null; // nessuna chiave configurata: si passa a Tesseract sotto
-    const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] }),
-    });
-    const json = await resp.json();
-    return json?.responses?.[0]?.fullTextAnnotation?.text || '';
+    try {
+      const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] }),
+      });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      if (json?.responses?.[0]?.error) return null;
+      const text = json?.responses?.[0]?.fullTextAnnotation?.text;
+      return typeof text === 'string' ? text : null;
+    } catch (e) { return null; }
   }
 
   function extractBestDigitGroup(rawText) {
@@ -645,7 +663,12 @@ function TextScanMode({ onDetected, certInfo }) {
       {status === 'ready' && (
         <>
           {certInfo && certInfo.vertical ? (
-            <div style={{ position: 'absolute', top: '20%', bottom: '20%', right: '18%', width: 60, border: `2px dashed ${C.gold}88`, borderRadius: 10 }} />
+            <>
+              <div style={{ position: 'absolute', top: '30%', bottom: '35%', right: '20%', width: 36, border: `2px dashed ${C.gold}88`, borderRadius: 8 }} />
+              <div style={{ position: 'absolute', top: '20%', left: 0, right: 0, textAlign: 'center' }}>
+                <span className="tk-body" style={{ color: C.paper, fontSize: 11, background: 'rgba(0,0,0,0.6)', padding: '5px 12px', borderRadius: 14 }}>Solo indicativo — inquadra tutta l'etichetta, va bene anche se non centri il riquadro</span>
+              </div>
+            </>
           ) : (
             <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px dashed ${C.gold}88`, borderRadius: 10 }} />
           )}
