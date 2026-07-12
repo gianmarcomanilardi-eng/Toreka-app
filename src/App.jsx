@@ -337,10 +337,10 @@ function ComingSoonView({ label }) {
 // cifre aspettarsi nel numero certificato — verificato guardando come fa
 // un'app vera dello stesso tipo (CertCheck), non inventato.
 const CERT_INFO = {
-  PSA: { hasCode: true, digits: [7, 9] },
-  CGC: { hasCode: true, digits: [8, 10] },
-  BGS: { hasCode: true, digits: [10, 10] },
-  TAG: { hasCode: true, digits: [6, 10] },
+  PSA: { hasCode: true, digits: [7, 9], hint: 'Il numero è davanti, in un angolo. Il codice a barre/QR è di solito sul RETRO — girala. Solo le slab dal 2020 in poi hanno il QR: se è più vecchia, niente scansione, solo il numero a mano.' },
+  CGC: { hasCode: true, digits: [8, 10], hint: 'Numero e QR sono di solito entrambi sull\u2019etichetta davanti.' },
+  BGS: { hasCode: true, digits: [10, 10], hint: 'Numero e codice sono di solito entrambi sull\u2019etichetta davanti, vicino ai voti.' },
+  TAG: { hasCode: true, digits: [6, 10], hint: 'Posizione meno standardizzata delle altre — prova prima il davanti dell\u2019etichetta.' },
 };
 
 function ScanView({ onBack, onDetected }) {
@@ -359,11 +359,11 @@ function ScanView({ onBack, onDetected }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
             {Object.keys(CERT_INFO).map((co) => (
-              <button key={co} onClick={() => { setCompany(co); setMode(CERT_INFO[co].hasCode ? 'barcode' : 'text'); }} className="tk-body" style={{
+              <button key={co} onClick={() => { setCompany(co); setMode('text'); }} className="tk-body" style={{
                 ...PANEL, borderRadius: 12, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600,
               }}>
                 {co}
-                <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5, fontWeight: 400 }}>{CERT_INFO[co].hasCode ? 'ha un codice scansionabile' : 'solo inserimento manuale'}</span>
+                <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5, fontWeight: 400 }}>{CERT_INFO[co].digits[0]}-{CERT_INFO[co].digits[1]} cifre</span>
               </button>
             ))}
           </div>
@@ -373,19 +373,22 @@ function ScanView({ onBack, onDetected }) {
   }
 
   const info = CERT_INFO[company];
+  const [hintOpen, setHintOpen] = useState(true);
   return (
     <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 3, display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={() => setCompany(null)} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
-        {info.hasCode ? (
-          <div style={{ display: 'flex', gap: 6 }}>
-            <Chip active={mode === 'barcode'} onClick={() => setMode('barcode')}>Codice a barre</Chip>
-            <Chip active={mode === 'text'} onClick={() => setMode('text')}>Numero a mano</Chip>
-          </div>
-        ) : (
-          <span className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600 }}>{company} — {info.digits[0]}-{info.digits[1]} cifre</span>
-        )}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Chip active={mode === 'barcode'} onClick={() => setMode('barcode')}>Codice a barre</Chip>
+          <Chip active={mode === 'text'} onClick={() => setMode('text')}>Numero a mano</Chip>
+        </div>
       </div>
+      {hintOpen && (
+        <div onClick={() => setHintOpen(false)} style={{ position: 'absolute', top: 62, left: 16, right: 16, zIndex: 3, background: 'rgba(0,0,0,0.75)', border: `1px solid ${C.gold}`, borderRadius: 10, padding: 12, cursor: 'pointer' }}>
+          <div className="tk-body" style={{ color: C.paper, fontSize: 11.5, lineHeight: 1.5 }}>{company}: {info.hint}</div>
+          <div className="tk-body" style={{ color: C.mist, fontSize: 9.5, marginTop: 4 }}>tocca per chiudere</div>
+        </div>
+      )}
       {mode === 'barcode' ? <BarcodeScanMode onDetected={onDetected} /> : <TextScanMode onDetected={onDetected} certInfo={info} />}
     </div>
   );
@@ -475,21 +478,27 @@ function TextScanMode({ onDetected, certInfo }) {
   async function captureAndRead() {
     setOcr({ phase: 'working', text: '' });
     const video = videoRef.current;
-    const vw = video.videoWidth, vh = video.videoHeight;
-    const cropX = vw * 0.10, cropW = vw * 0.80;
-    const cropY = vh * 0.36, cropH = vh * 0.14;
+    // fotogramma intero, non più ritagliato — la prima volta, senza
+    // ritaglio, aveva letto correttamente: restringere troppo peggiorava.
+    // Lo ingrandisco 2x prima di leggerlo: testo più grande = di solito
+    // riconoscimento più preciso, tecnica standard per l'OCR da foto.
+    const scale = 2;
     const canvas = document.createElement('canvas');
-    canvas.width = cropW;
-    canvas.height = cropH;
-    canvas.getContext('2d').drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     preprocess(canvas);
     try {
       const Tesseract = await import('tesseract.js');
       const worker = await Tesseract.createWorker('eng');
-      // spazio e punto ammessi apposta, per NON incollare insieme due
-      // numeri vicini (es. il voto "8.5" e il certificato) — prima li
-      // fondeva in un'unica stringa perché doveva ignorare lo spazio tra loro.
-      await worker.setParameters({ tessedit_char_whitelist: '0123456789 .' });
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789 .',
+        // "testo sparso" invece di "pagina intera": l'etichetta ha più
+        // numeri separati vicini, non un unico blocco di testo — questa
+        // modalità li cerca uno per uno invece di provare a ricostruire
+        // un layout di pagina, più adatta a questo caso.
+        tessedit_pageseg_mode: '11',
+      });
       const { data } = await worker.recognize(canvas);
       await worker.terminate();
       // spezza in gruppi di sole cifre (lo spazio/punto fa da separatore)
@@ -520,7 +529,7 @@ function TextScanMode({ onDetected, certInfo }) {
       )}
       {status === 'ready' && (
         <>
-          <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px solid ${C.gold}`, borderRadius: 10, boxShadow: '0 0 0 2000px rgba(0,0,0,0.4)' }} />
+          <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px dashed ${C.gold}88`, borderRadius: 10 }} />
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.75)', padding: '16px 20px calc(24px + env(safe-area-inset-bottom))' }}>
             {ocr.phase === 'idle' && (
               <button onClick={captureAndRead} className="tk-body" style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: C.vermillion, color: C.paper, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Fotografa e leggi il numero</button>
