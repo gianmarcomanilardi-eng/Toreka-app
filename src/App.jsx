@@ -333,19 +333,60 @@ function ComingSoonView({ label }) {
 // collegato — mostra i dati grezzi così come arrivano, senza vestirli
 // con la grafica delle altre schermate (quelle restano sui dati finti
 // finché non decidiamo insieme come unire le due cose).
-function ScanView({ onBack, onDetected }) {
-  const [mode, setMode] = useState('barcode'); // barcode | text
+// Quali case hanno davvero un codice leggibile dalla fotocamera, e quante
+// cifre aspettarsi nel numero certificato — verificato guardando come fa
+// un'app vera dello stesso tipo (CertCheck), non inventato.
+const CERT_INFO = {
+  PSA: { hasCode: true, digits: [7, 9] },
+  CGC: { hasCode: true, digits: [8, 10] },
+  BGS: { hasCode: true, digits: [10, 10] },
+  TAG: { hasCode: true, digits: [6, 10] },
+};
 
+function ScanView({ onBack, onDetected }) {
+  const [company, setCompany] = useState(null);
+  const [mode, setMode] = useState(null); // barcode | text
+
+  if (!company) {
+    return (
+      <div style={{ height: '100%', background: C.ink, position: 'relative' }}>
+        <GridTexture />
+        <div style={{ position: 'relative', padding: '18px 16px' }}>
+          <button onClick={onBack} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
+          <div className="tk-display" style={{ color: C.paper, fontSize: 18, fontWeight: 700, marginTop: 20 }}>Che casa di gradazione?</div>
+          <div className="tk-body" style={{ color: C.mist, fontSize: 12, marginTop: 4, lineHeight: 1.5 }}>
+            Solo PSA e CGC mettono un codice leggibile dalla fotocamera sulla slab — le altre no, lo verifica anche CertCheck, un'app dello stesso tipo. Selezionando la casa, ti porto dritto al metodo giusto invece di farti provare a caso.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
+            {Object.keys(CERT_INFO).map((co) => (
+              <button key={co} onClick={() => { setCompany(co); setMode(CERT_INFO[co].hasCode ? 'barcode' : 'text'); }} className="tk-body" style={{
+                ...PANEL, borderRadius: 12, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600,
+              }}>
+                {co}
+                <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5, fontWeight: 400 }}>{CERT_INFO[co].hasCode ? 'ha un codice scansionabile' : 'solo inserimento manuale'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const info = CERT_INFO[company];
   return (
     <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 3, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={onBack} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <Chip active={mode === 'barcode'} onClick={() => setMode('barcode')}>Codice a barre</Chip>
-          <Chip active={mode === 'text'} onClick={() => setMode('text')}>Numero stampato</Chip>
-        </div>
+        <button onClick={() => setCompany(null)} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
+        {info.hasCode ? (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <Chip active={mode === 'barcode'} onClick={() => setMode('barcode')}>Codice a barre</Chip>
+            <Chip active={mode === 'text'} onClick={() => setMode('text')}>Numero a mano</Chip>
+          </div>
+        ) : (
+          <span className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600 }}>{company} — {info.digits[0]}-{info.digits[1]} cifre</span>
+        )}
       </div>
-      {mode === 'barcode' ? <BarcodeScanMode onDetected={onDetected} /> : <TextScanMode onDetected={onDetected} />}
+      {mode === 'barcode' ? <BarcodeScanMode onDetected={onDetected} /> : <TextScanMode onDetected={onDetected} certInfo={info} />}
     </div>
   );
 }
@@ -396,7 +437,7 @@ function BarcodeScanMode({ onDetected }) {
   );
 }
 
-function TextScanMode({ onDetected }) {
+function TextScanMode({ onDetected, certInfo }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [status, setStatus] = useState('starting'); // starting | ready | error
@@ -417,23 +458,35 @@ function TextScanMode({ onDetected }) {
     return () => { active = false; if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop()); };
   }, []);
 
+  function preprocess(canvas) {
+    // scala di grigi + contrasto netto (bianco/nero) — tecnica standard
+    // per aiutare l'OCR su superfici lucide con riflessi, non specifica
+    // di questa libreria: funziona così ovunque si faccia OCR da foto.
+    const ctx = canvas.getContext('2d');
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const gray = img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11;
+      const bw = gray > 140 ? 255 : 0; // soglia netta bianco/nero, riduce l'effetto dei riflessi
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = bw;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
   async function captureAndRead() {
     setOcr({ phase: 'working', text: '' });
     const video = videoRef.current;
     const vw = video.videoWidth, vh = video.videoHeight;
-    // ritaglia solo la zona del riquadro dorato (10%-90% orizzontale,
-    // fascia centrale verticale) invece di leggere tutta l'inquadratura
-    // piena di sfondo e carta — prima leggeva anche quello, inutilmente.
     const cropX = vw * 0.10, cropW = vw * 0.80;
     const cropY = vh * 0.36, cropH = vh * 0.14;
     const canvas = document.createElement('canvas');
     canvas.width = cropW;
     canvas.height = cropH;
     canvas.getContext('2d').drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    preprocess(canvas);
     try {
       const Tesseract = await import('tesseract.js');
       const worker = await Tesseract.createWorker('eng');
-      await worker.setParameters({ tessedit_char_whitelist: '0123456789' }); // legge solo cifre — meno confusione tra es. "0"/"O" o "1"/"I"
+      await worker.setParameters({ tessedit_char_whitelist: '0123456789' });
       const { data } = await worker.recognize(canvas);
       await worker.terminate();
       const cleaned = (data.text || '').replace(/[^0-9]/g, '').trim();
@@ -442,6 +495,8 @@ function TextScanMode({ onDetected }) {
       setOcr({ phase: 'done', text: '' });
     }
   }
+
+  const lenOk = !certInfo || (ocr.text.length >= certInfo.digits[0] && ocr.text.length <= certInfo.digits[1]);
 
   return (
     <>
@@ -467,11 +522,11 @@ function TextScanMode({ onDetected }) {
             {ocr.phase === 'done' && (
               <div>
                 <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 6 }}>
-                  {ocr.text ? 'Controlla e correggi se serve, poi conferma:' : 'Non sono riuscito a leggere nulla — scrivilo tu:'}
+                  {!ocr.text ? 'Non sono riuscito a leggere nulla — scrivilo tu:' : lenOk ? 'Controlla e correggi se serve, poi conferma:' : `Ha letto ${ocr.text.length} cifre, ma ${certInfo ? `di solito sono ${certInfo.digits[0]}-${certInfo.digits[1]}` : 'sembrano poche'} — probabile lettura sbagliata, correggi prima di confermare:`}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: e.target.value.replace(/[^0-9]/g, '') })} inputMode="numeric" pattern="[0-9]*" className="tk-mono"
-                    style={{ flex: 1, background: C.ink2, border: `1px solid ${C.gold}`, borderRadius: 10, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
+                    style={{ flex: 1, background: C.ink2, border: `1px solid ${lenOk ? C.gold : C.vermillion}`, borderRadius: 10, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
                   <button onClick={() => ocr.text.trim() && onDetected(ocr.text.trim())} className="tk-body" style={{ padding: '0 18px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Conferma</button>
                 </div>
                 <div onClick={() => setOcr({ phase: 'idle', text: '' })} className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 10, textAlign: 'center', cursor: 'pointer', textDecoration: 'underline' }}>riprova la foto</div>
