@@ -340,7 +340,7 @@ const CERT_INFO = {
   PSA: { hasCode: true, digits: [7, 9], hint: 'Il numero è davanti, in un angolo. Il codice a barre/QR è di solito sul RETRO — girala. Solo le slab dal 2020 in poi hanno il QR: se è più vecchia, niente scansione, solo il numero a mano.' },
   CGC: { hasCode: true, digits: [8, 10], hint: 'Numero e QR sono di solito entrambi sull\u2019etichetta davanti.' },
   BGS: { hasCode: true, digits: [10, 10], hint: 'Numero e codice sono di solito entrambi sull\u2019etichetta davanti, vicino ai voti. Fondo argentato: più difficile da leggere, prova buona luce diretta senza riflessi.' },
-  TAG: { hasCode: true, digits: [6, 10], hint: 'Il numero seriale verticale (con lettere) è accanto al QR — è quello che leggo qui. Se preferisci il QR, cambia in alto su "Codice a barre".', alphanumeric: true },
+  TAG: { hasCode: true, digits: [6, 10], hint: 'Il numero seriale verticale (con lettere) è accanto al QR — è quello che leggo qui. Se preferisci il QR, cambia in alto su "Codice a barre".', alphanumeric: true, vertical: true },
 };
 
 function ScanView({ onBack, onDetected }) {
@@ -593,7 +593,11 @@ function TextScanMode({ onDetected, certInfo }) {
       )}
       {status === 'ready' && (
         <>
-          <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px dashed ${C.gold}88`, borderRadius: 10 }} />
+          {certInfo && certInfo.vertical ? (
+            <div style={{ position: 'absolute', top: '20%', bottom: '20%', right: '18%', width: 60, border: `2px dashed ${C.gold}88`, borderRadius: 10 }} />
+          ) : (
+            <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px dashed ${C.gold}88`, borderRadius: 10 }} />
+          )}
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.75)', padding: '16px 20px calc(24px + env(safe-area-inset-bottom))' }}>
             {ocr.phase === 'idle' && (
               <button onClick={captureAndRead} className="tk-body" style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: C.vermillion, color: C.paper, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Fotografa e leggi il numero</button>
