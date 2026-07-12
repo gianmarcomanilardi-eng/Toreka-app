@@ -339,8 +339,8 @@ function ComingSoonView({ label }) {
 const CERT_INFO = {
   PSA: { hasCode: true, digits: [7, 9], hint: 'Il numero è davanti, in un angolo. Il codice a barre/QR è di solito sul RETRO — girala. Solo le slab dal 2020 in poi hanno il QR: se è più vecchia, niente scansione, solo il numero a mano.' },
   CGC: { hasCode: true, digits: [8, 10], hint: 'Numero e QR sono di solito entrambi sull\u2019etichetta davanti.' },
-  BGS: { hasCode: true, digits: [10, 10], hint: 'Numero e codice sono di solito entrambi sull\u2019etichetta davanti, vicino ai voti.' },
-  TAG: { hasCode: true, digits: [6, 10], hint: 'Posizione meno standardizzata delle altre — prova prima il davanti dell\u2019etichetta.' },
+  BGS: { hasCode: true, digits: [10, 10], hint: 'Numero e codice sono di solito entrambi sull\u2019etichetta davanti, vicino ai voti. Fondo argentato: più difficile da leggere, prova buona luce diretta senza riflessi.' },
+  TAG: { hasCode: true, digits: [6, 10], hint: 'Si legge con un codice QR, non un numero stampato — usa "Codice a barre", non "Numero a mano".', defaultBarcode: true },
 };
 
 function ScanView({ onBack, onDetected }) {
@@ -360,7 +360,7 @@ function ScanView({ onBack, onDetected }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
             {Object.keys(CERT_INFO).map((co) => (
-              <button key={co} onClick={() => { setCompany(co); setMode('text'); }} className="tk-body" style={{
+              <button key={co} onClick={() => { setCompany(co); setMode(CERT_INFO[co].defaultBarcode ? 'barcode' : 'text'); }} className="tk-body" style={{
                 ...PANEL, borderRadius: 12, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600,
               }}>
                 {co}
@@ -493,11 +493,40 @@ function TextScanMode({ onDetected, certInfo }) {
     return goodMatch || groups.sort((a, b) => b.length - a.length)[0] || '';
   }
 
+  async function readWithOcrSpace(base64Image) {
+    const key = 'K84416916188957'; // chiave OCR.space
+    if (!key) return null;
+    const form = new FormData();
+    form.append('apikey', key);
+    form.append('base64Image', `data:image/jpeg;base64,${base64Image}`);
+    form.append('OCREngine', '3'); // il più adatto a cifre singole e sfondi difficili (es. l'argentato BGS)
+    form.append('scale', 'true'); // ingrandimento interno, utile su foto piccole
+    const resp = await fetch('https://api.ocr.space/parse/image', { method: 'POST', body: form });
+    const json = await resp.json();
+    return json?.ParsedResults?.[0]?.ParsedText || '';
+  }
+
+  async function readWithGoogleVision(base64Image) {
+    const key = ''; // <- incolla qui la tua chiave Google Cloud Vision, quando l'hai
+    if (!key) return null; // nessuna chiave configurata: si passa a Tesseract sotto
+    const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ image: { content: base64Image }, features: [{ type: 'TEXT_DETECTION' }] }] }),
+    });
+    const json = await resp.json();
+    return json?.responses?.[0]?.fullTextAnnotation?.text || '';
+  }
+
+  function extractBestDigitGroup(rawText) {
+    const groups = (rawText || '').split(/[^0-9]+/).filter(Boolean);
+    const [minLen, maxLen] = certInfo ? certInfo.digits : [0, 99];
+    const goodMatch = groups.find((g) => g.length >= minLen && g.length <= maxLen);
+    return goodMatch || groups.sort((a, b) => b.length - a.length)[0] || '';
+  }
+
   async function captureAndRead() {
     setOcr({ phase: 'working', text: '', candidates: [] });
-    // UNO scatto solo — da quello, quattro modi diversi di prepararlo
-    // prima di leggerlo, e voto tra i quattro risultati. Niente foto
-    // ripetute: la variazione viene dalla preparazione, non dallo scatto.
     const video = videoRef.current;
     const scale = 2;
     const base = document.createElement('canvas');
@@ -505,6 +534,26 @@ function TextScanMode({ onDetected, certInfo }) {
     base.height = video.videoHeight * scale;
     base.getContext('2d').drawImage(video, 0, 0, base.width, base.height);
 
+    // Prova prima OCR.space (gratis, nessuna carta, pensato apposta per
+    // sfondi difficili come quello argentato delle BGS). Se non è
+    // configurata una chiave, prova Google Vision. Se nessuna delle due
+    // chiavi è impostata, si passa a Tesseract più sotto — sempre gratis.
+    try {
+      const base64 = base.toDataURL('image/jpeg', 0.9).split(',')[1];
+      const ocrSpaceText = await readWithOcrSpace(base64);
+      if (ocrSpaceText !== null) {
+        setOcr({ phase: 'done', text: extractBestDigitGroup(ocrSpaceText), candidates: [] });
+        return;
+      }
+      const googleText = await readWithGoogleVision(base64);
+      if (googleText !== null) {
+        setOcr({ phase: 'done', text: extractBestDigitGroup(googleText), candidates: [] });
+        return;
+      }
+    } catch (e) { /* se il motore online fallisce per qualunque motivo, prosegue con Tesseract sotto */ }
+
+    // Tesseract, con le quattro varianti di prima — resta il piano B
+    // gratuito, sempre disponibile senza nessuna chiave.
     const variants = [120, 140, 165, null].map((t) => toGrayscaleVariant(base, t));
     const results = [];
     try {
