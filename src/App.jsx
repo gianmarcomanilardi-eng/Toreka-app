@@ -335,32 +335,52 @@ function ComingSoonView({ label }) {
 // finché non decidiamo insieme come unire le due cose).
 function ScanView({ onBack, onDetected }) {
   const videoRef = useRef(null);
-  const [status, setStatus] = useState('starting'); // starting | scanning | error
+  const streamRef = useRef(null);
+  const readerRef = useRef(null);
+  const [status, setStatus] = useState('starting'); // starting | ready | error
   const [error, setError] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     let active = true;
-    const reader = new BrowserMultiFormatReader();
+    readerRef.current = new BrowserMultiFormatReader();
 
-    reader.decodeFromConstraints(
-      { video: { facingMode: 'environment' } },
-      videoRef.current,
-      (result) => {
-        if (!active || !result) return;
-        active = false;
-        onDetected(result.getText());
-      }
-    ).then(() => { if (active) setStatus('scanning'); })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((stream) => {
+        if (!active) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        return videoRef.current.play();
+      })
+      .then(() => { if (active) setStatus('ready'); })
       .catch((e) => { if (active) { setStatus('error'); setError(e.message || String(e)); } });
 
-    return () => { active = false; try { reader.reset(); } catch (e) {} };
-  }, [onDetected]);
+    return () => {
+      active = false;
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  async function captureNow() {
+    if (checking) return;
+    setChecking(true);
+    setNotFound(false);
+    try {
+      const result = await readerRef.current.decodeOnceFromVideoElement(videoRef.current);
+      onDetected(result.getText());
+    } catch (e) {
+      setNotFound(true); // nessun codice trovato in questo scatto — normale, si può riprovare
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
     <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={onBack} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
-        <span className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600 }}>Inquadra il codice sulla slab</span>
+        <span className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600 }}>Inquadra il codice, poi tocca il pulsante</span>
       </div>
       <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       {status === 'starting' && (
@@ -376,8 +396,23 @@ function ScanView({ onBack, onDetected }) {
           </div>
         </div>
       )}
-      {status === 'scanning' && (
-        <div style={{ position: 'absolute', top: '32%', left: '15%', right: '15%', bottom: '42%', border: `2px solid ${C.gold}`, borderRadius: 12, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }} />
+      {status === 'ready' && (
+        <>
+          <div style={{ position: 'absolute', top: '32%', left: '15%', right: '15%', bottom: '42%', border: `2px solid ${C.gold}`, borderRadius: 12, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }} />
+          {notFound && (
+            <div style={{ position: 'absolute', bottom: 130, left: 0, right: 0, textAlign: 'center' }}>
+              <span className="tk-body" style={{ color: C.paper, fontSize: 12, background: 'rgba(0,0,0,0.6)', padding: '6px 14px', borderRadius: 20 }}>Nessun codice trovato — avvicina o metti a fuoco e riprova</span>
+            </div>
+          )}
+          <div style={{ position: 'absolute', bottom: 32, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
+            <button onClick={captureNow} disabled={checking} style={{
+              width: 72, height: 72, borderRadius: '50%', background: checking ? C.mist : C.vermillion,
+              border: `4px solid ${C.paper}`, cursor: checking ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {checking ? <span className="tk-mono" style={{ color: C.ink, fontSize: 10 }}>...</span> : <ScanLine size={26} color={C.paper} />}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
