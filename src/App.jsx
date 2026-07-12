@@ -340,7 +340,7 @@ const CERT_INFO = {
   PSA: { hasCode: true, digits: [7, 9], hint: 'Il numero è davanti, in un angolo. Il codice a barre/QR è di solito sul RETRO — girala. Solo le slab dal 2020 in poi hanno il QR: se è più vecchia, niente scansione, solo il numero a mano.' },
   CGC: { hasCode: true, digits: [8, 10], hint: 'Numero e QR sono di solito entrambi sull\u2019etichetta davanti.' },
   BGS: { hasCode: true, digits: [10, 10], hint: 'Numero e codice sono di solito entrambi sull\u2019etichetta davanti, vicino ai voti. Fondo argentato: più difficile da leggere, prova buona luce diretta senza riflessi.' },
-  TAG: { hasCode: true, digits: [6, 10], hint: 'Si legge con un codice QR, non un numero stampato — usa "Codice a barre", non "Numero a mano".', defaultBarcode: true },
+  TAG: { hasCode: true, digits: [6, 10], hint: 'Ha un QR code E un numero seriale verticale con anche lettere, vicino al QR. Se il QR non basta, prova "Numero a mano" per il seriale.', defaultBarcode: true, alphanumeric: true },
 };
 
 function ScanView({ onBack, onDetected }) {
@@ -501,6 +501,7 @@ function TextScanMode({ onDetected, certInfo }) {
     form.append('base64Image', `data:image/jpeg;base64,${base64Image}`);
     form.append('OCREngine', '3'); // il più adatto a cifre singole e sfondi difficili (es. l'argentato BGS)
     form.append('scale', 'true'); // ingrandimento interno, utile su foto piccole
+    form.append('detectOrientation', 'true'); // ruota da sola il testo in verticale (serve per TAG)
     const resp = await fetch('https://api.ocr.space/parse/image', { method: 'POST', body: form });
     const json = await resp.json();
     return json?.ParsedResults?.[0]?.ParsedText || '';
@@ -519,7 +520,12 @@ function TextScanMode({ onDetected, certInfo }) {
   }
 
   function extractBestDigitGroup(rawText) {
-    const groups = (rawText || '').split(/[^0-9]+/).filter(Boolean);
+    // TAG ha un seriale con anche lettere — per le altre case restano solo
+    // cifre, come prima. Il separatore tra gruppi resta lo spazio/a-capo,
+    // così non si incollano insieme testi vicini ma diversi come già
+    // successo con voto+certificato.
+    const pattern = certInfo && certInfo.alphanumeric ? /[^A-Za-z0-9]+/ : /[^0-9]+/;
+    const groups = (rawText || '').split(pattern).filter(Boolean);
     const [minLen, maxLen] = certInfo ? certInfo.digits : [0, 99];
     const goodMatch = groups.find((g) => g.length >= minLen && g.length <= maxLen);
     return goodMatch || groups.sort((a, b) => b.length - a.length)[0] || '';
@@ -612,7 +618,7 @@ function TextScanMode({ onDetected, certInfo }) {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: e.target.value.replace(/[^0-9]/g, '') })} inputMode="numeric" pattern="[0-9]*" className="tk-mono"
+                  <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: (certInfo && certInfo.alphanumeric ? e.target.value.replace(/[^A-Za-z0-9]/g, '') : e.target.value.replace(/[^0-9]/g, '')) })} inputMode={certInfo && certInfo.alphanumeric ? 'text' : 'numeric'} pattern={certInfo && certInfo.alphanumeric ? undefined : '[0-9]*'} className="tk-mono"
                     style={{ flex: 1, background: C.ink2, border: `1px solid ${lenOk ? C.gold : C.vermillion}`, borderRadius: 10, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
                   <button onClick={() => ocr.text.trim() && onDetected(ocr.text.trim())} className="tk-body" style={{ padding: '0 18px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Conferma</button>
                 </div>
