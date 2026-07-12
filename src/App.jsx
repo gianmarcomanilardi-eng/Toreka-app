@@ -493,6 +493,47 @@ function TextScanMode({ onDetected, certInfo }) {
     return goodMatch || groups.sort((a, b) => b.length - a.length)[0] || '';
   }
 
+  async function readWithGemini(base64Image) {
+    const key = 'AQ.Ab8RN6KFBAn5mYJwnFONdLN0QArkZJRRoUFRnhcIkpNHvfbUcw'; // chiave Gemini
+    if (!key) return null;
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
+            { text: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.' },
+          ],
+        }],
+      }),
+    });
+    const json = await resp.json();
+    return json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+
+  async function readWithClaude(base64Image) {
+    const key = ''; // <- incolla qui la tua chiave API Anthropic, quando l'hai
+    if (!key) return null;
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 50,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64Image } },
+            { type: 'text', text: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.' },
+          ],
+        }],
+      }),
+    });
+    const json = await resp.json();
+    return json?.content?.[0]?.text || '';
+  }
+
   async function readWithOcrSpace(base64Image) {
     const key = 'K84416916188957'; // chiave OCR.space
     if (!key) return null;
@@ -540,12 +581,22 @@ function TextScanMode({ onDetected, certInfo }) {
     base.height = video.videoHeight * scale;
     base.getContext('2d').drawImage(video, 0, 0, base.width, base.height);
 
-    // Prova prima OCR.space (gratis, nessuna carta, pensato apposta per
-    // sfondi difficili come quello argentato delle BGS). Se non è
-    // configurata una chiave, prova Google Vision. Se nessuna delle due
-    // chiavi è impostata, si passa a Tesseract più sotto — sempre gratis.
+    // Prova prima Gemini (visione vera, gratis, sganciato da Anthropic —
+    // quello che avevi chiesto). Poi Claude se hai comunque messo una
+    // chiave. Poi OCR.space (gratis, nessuna carta). Poi Google Vision se
+    // configurato. Tesseract resta sempre come ultima riserva gratuita.
     try {
       const base64 = base.toDataURL('image/jpeg', 0.9).split(',')[1];
+      const geminiText = await readWithGemini(base64);
+      if (geminiText !== null) {
+        setOcr({ phase: 'done', text: extractBestDigitGroup(geminiText), candidates: [] });
+        return;
+      }
+      const claudeText = await readWithClaude(base64);
+      if (claudeText !== null) {
+        setOcr({ phase: 'done', text: extractBestDigitGroup(claudeText), candidates: [] });
+        return;
+      }
       const ocrSpaceText = await readWithOcrSpace(base64);
       if (ocrSpaceText !== null) {
         setOcr({ phase: 'done', text: extractBestDigitGroup(ocrSpaceText), candidates: [] });
