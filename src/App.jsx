@@ -340,7 +340,7 @@ const CERT_INFO = {
   PSA: { hasCode: true, digits: [7, 9], hint: 'Il numero è davanti, in un angolo. Il codice a barre/QR è di solito sul RETRO — girala. Solo le slab dal 2020 in poi hanno il QR: se è più vecchia, niente scansione, solo il numero a mano.' },
   CGC: { hasCode: true, digits: [8, 10], hint: 'Numero e QR sono di solito entrambi sull\u2019etichetta davanti.' },
   BGS: { hasCode: true, digits: [10, 10], hint: 'Numero e codice sono di solito entrambi sull\u2019etichetta davanti, vicino ai voti. Fondo argentato: più difficile da leggere, prova buona luce diretta senza riflessi.' },
-  TAG: { hasCode: true, digits: [6, 10], hint: 'Ha un QR code E un numero seriale verticale con anche lettere, vicino al QR. Se il QR non basta, prova "Numero a mano" per il seriale.', defaultBarcode: true, alphanumeric: true },
+  TAG: { hasCode: true, digits: [6, 10], hint: 'Il numero seriale verticale (con lettere) è accanto al QR — è quello che leggo qui. Se preferisci il QR, cambia in alto su "Codice a barre".', alphanumeric: true },
 };
 
 function ScanView({ onBack, onDetected }) {
