@@ -420,10 +420,16 @@ function TextScanMode({ onDetected }) {
   async function captureAndRead() {
     setOcr({ phase: 'working', text: '' });
     const video = videoRef.current;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    // ritaglia solo la zona del riquadro dorato (10%-90% orizzontale,
+    // fascia centrale verticale) invece di leggere tutta l'inquadratura
+    // piena di sfondo e carta — prima leggeva anche quello, inutilmente.
+    const cropX = vw * 0.10, cropW = vw * 0.80;
+    const cropY = vh * 0.36, cropH = vh * 0.14;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.width = cropW;
+    canvas.height = cropH;
+    canvas.getContext('2d').drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
     try {
       const Tesseract = await import('tesseract.js');
       const worker = await Tesseract.createWorker('eng');
