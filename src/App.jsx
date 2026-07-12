@@ -346,6 +346,7 @@ const CERT_INFO = {
 function ScanView({ onBack, onDetected }) {
   const [company, setCompany] = useState(null);
   const [mode, setMode] = useState(null); // barcode | text
+  const [hintOpen, setHintOpen] = useState(true);
 
   if (!company) {
     return (
@@ -373,7 +374,6 @@ function ScanView({ onBack, onDetected }) {
   }
 
   const info = CERT_INFO[company];
-  const [hintOpen, setHintOpen] = useState(true);
   return (
     <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 3, display: 'flex', alignItems: 'center', gap: 10 }}>
