@@ -426,8 +426,11 @@ function TextScanMode({ onDetected }) {
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     try {
       const Tesseract = await import('tesseract.js');
-      const { data } = await Tesseract.recognize(canvas, 'eng');
-      const cleaned = (data.text || '').replace(/[^A-Za-z0-9]/g, '').trim();
+      const worker = await Tesseract.createWorker('eng');
+      await worker.setParameters({ tessedit_char_whitelist: '0123456789' }); // legge solo cifre — meno confusione tra es. "0"/"O" o "1"/"I"
+      const { data } = await worker.recognize(canvas);
+      await worker.terminate();
+      const cleaned = (data.text || '').replace(/[^0-9]/g, '').trim();
       setOcr({ phase: 'done', text: cleaned });
     } catch (e) {
       setOcr({ phase: 'done', text: '' });
@@ -461,7 +464,7 @@ function TextScanMode({ onDetected }) {
                   {ocr.text ? 'Controlla e correggi se serve, poi conferma:' : 'Non sono riuscito a leggere nulla — scrivilo tu:'}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: e.target.value })} className="tk-mono"
+                  <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: e.target.value.replace(/[^0-9]/g, '') })} inputMode="numeric" pattern="[0-9]*" className="tk-mono"
                     style={{ flex: 1, background: C.ink2, border: `1px solid ${C.gold}`, borderRadius: 10, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
                   <button onClick={() => ocr.text.trim() && onDetected(ocr.text.trim())} className="tk-body" style={{ padding: '0 18px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Conferma</button>
                 </div>
