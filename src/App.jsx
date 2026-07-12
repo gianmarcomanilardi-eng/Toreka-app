@@ -486,10 +486,19 @@ function TextScanMode({ onDetected, certInfo }) {
     try {
       const Tesseract = await import('tesseract.js');
       const worker = await Tesseract.createWorker('eng');
-      await worker.setParameters({ tessedit_char_whitelist: '0123456789' });
+      // spazio e punto ammessi apposta, per NON incollare insieme due
+      // numeri vicini (es. il voto "8.5" e il certificato) — prima li
+      // fondeva in un'unica stringa perché doveva ignorare lo spazio tra loro.
+      await worker.setParameters({ tessedit_char_whitelist: '0123456789 .' });
       const { data } = await worker.recognize(canvas);
       await worker.terminate();
-      const cleaned = (data.text || '').replace(/[^0-9]/g, '').trim();
+      // spezza in gruppi di sole cifre (lo spazio/punto fa da separatore)
+      const groups = (data.text || '').split(/[^0-9]+/).filter(Boolean);
+      // preferisce il gruppo con la lunghezza giusta per la casa scelta;
+      // se nessuno combacia, prende il più lungo trovato.
+      const [minLen, maxLen] = certInfo ? certInfo.digits : [0, 99];
+      const goodMatch = groups.find((g) => g.length >= minLen && g.length <= maxLen);
+      const cleaned = goodMatch || groups.sort((a, b) => b.length - a.length)[0] || '';
       setOcr({ phase: 'done', text: cleaned });
     } catch (e) {
       setOcr({ phase: 'done', text: '' });
