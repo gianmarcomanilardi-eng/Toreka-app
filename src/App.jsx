@@ -334,8 +334,24 @@ function ComingSoonView({ label }) {
 // con la grafica delle altre schermate (quelle restano sui dati finti
 // finché non decidiamo insieme come unire le due cose).
 function ScanView({ onBack, onDetected }) {
+  const [mode, setMode] = useState('barcode'); // barcode | text
+
+  return (
+    <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 3, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={onBack} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Chip active={mode === 'barcode'} onClick={() => setMode('barcode')}>Codice a barre</Chip>
+          <Chip active={mode === 'text'} onClick={() => setMode('text')}>Numero stampato</Chip>
+        </div>
+      </div>
+      {mode === 'barcode' ? <BarcodeScanMode onDetected={onDetected} /> : <TextScanMode onDetected={onDetected} />}
+    </div>
+  );
+}
+
+function BarcodeScanMode({ onDetected }) {
   const videoRef = useRef(null);
-  const readerRef = useRef(null);
   const [status, setStatus] = useState('starting'); // starting | scanning | error
   const [error, setError] = useState('');
   const [restartTick, setRestartTick] = useState(0);
@@ -343,59 +359,119 @@ function ScanView({ onBack, onDetected }) {
   useEffect(() => {
     let active = true;
     const reader = new BrowserMultiFormatReader();
-    readerRef.current = reader;
-
     reader.decodeFromConstraints(
       { video: { facingMode: 'environment' } },
       videoRef.current,
       (result) => {
-        if (!active || !result) return; // niente trovato in questo fotogramma è normale, riprova da solo
+        if (!active || !result) return;
         active = false;
         onDetected(result.getText());
       }
     ).then(() => { if (active) setStatus('scanning'); })
       .catch((e) => { if (active) { setStatus('error'); setError(e.message || String(e)); } });
-
     return () => { active = false; try { reader.reset(); } catch (e) {} };
   }, [restartTick, onDetected]);
 
   return (
-    <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={onBack} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
-        <span className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600 }}>Inquadra il codice sulla slab</span>
-      </div>
+    <>
       <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       {status === 'starting' && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span className="tk-body" style={{ color: C.paper, fontSize: 13 }}>Avvio fotocamera...</span>
-        </div>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span className="tk-body" style={{ color: C.paper, fontSize: 13 }}>Avvio fotocamera...</span></div>
       )}
       {status === 'error' && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, textAlign: 'center', lineHeight: 1.6 }}>
-            Non riesco ad accedere alla fotocamera.<br /><span style={{ color: C.mist, fontSize: 11 }}>{error}</span><br /><br />
-            Controlla di aver dato il permesso della fotocamera a Toreka (Safari → Impostazioni sito).
-          </div>
+          <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, textAlign: 'center', lineHeight: 1.6 }}>Non riesco ad accedere alla fotocamera.<br /><span style={{ color: C.mist, fontSize: 11 }}>{error}</span></div>
         </div>
       )}
       {status === 'scanning' && (
         <>
           <div style={{ position: 'absolute', top: '32%', left: '15%', right: '15%', bottom: '42%', border: `2px solid ${C.gold}`, borderRadius: 12, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }} />
-          <div style={{ position: 'absolute', bottom: 110, left: 0, right: 0, textAlign: 'center' }}>
-            <span className="tk-mono" style={{ color: C.gold, fontSize: 11, background: 'rgba(0,0,0,0.6)', padding: '5px 14px', borderRadius: 20 }}>● lettura attiva — cerca in automatico</span>
-          </div>
+          <div style={{ position: 'absolute', bottom: 110, left: 0, right: 0, textAlign: 'center' }}><span className="tk-mono" style={{ color: C.gold, fontSize: 11, background: 'rgba(0,0,0,0.6)', padding: '5px 14px', borderRadius: 20 }}>● lettura attiva — cerca in automatico</span></div>
           <div style={{ position: 'absolute', bottom: 32, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
-            <button onClick={() => setRestartTick((t) => t + 1)} style={{
-              width: 72, height: 72, borderRadius: '50%', background: C.vermillion,
-              border: `4px solid ${C.paper}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }} title="Riavvia la lettura se è bloccata">
-              <ScanLine size={26} color={C.paper} />
-            </button>
+            <button onClick={() => setRestartTick((t) => t + 1)} style={{ width: 72, height: 72, borderRadius: '50%', background: C.vermillion, border: `4px solid ${C.paper}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Riavvia se bloccata"><ScanLine size={26} color={C.paper} /></button>
           </div>
         </>
       )}
-    </div>
+    </>
+  );
+}
+
+function TextScanMode({ onDetected }) {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [status, setStatus] = useState('starting'); // starting | ready | error
+  const [error, setError] = useState('');
+  const [ocr, setOcr] = useState({ phase: 'idle', text: '' }); // idle | working | done
+
+  useEffect(() => {
+    let active = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((stream) => {
+        if (!active) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        return videoRef.current.play();
+      })
+      .then(() => { if (active) setStatus('ready'); })
+      .catch((e) => { if (active) { setStatus('error'); setError(e.message || String(e)); } });
+    return () => { active = false; if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop()); };
+  }, []);
+
+  async function captureAndRead() {
+    setOcr({ phase: 'working', text: '' });
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    try {
+      const Tesseract = await import('tesseract.js');
+      const { data } = await Tesseract.recognize(canvas, 'eng');
+      const cleaned = (data.text || '').replace(/[^A-Za-z0-9]/g, '').trim();
+      setOcr({ phase: 'done', text: cleaned });
+    } catch (e) {
+      setOcr({ phase: 'done', text: '' });
+    }
+  }
+
+  return (
+    <>
+      <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      {status === 'starting' && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span className="tk-body" style={{ color: C.paper, fontSize: 13 }}>Avvio fotocamera...</span></div>
+      )}
+      {status === 'error' && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, textAlign: 'center', lineHeight: 1.6 }}>Non riesco ad accedere alla fotocamera.<br /><span style={{ color: C.mist, fontSize: 11 }}>{error}</span></div>
+        </div>
+      )}
+      {status === 'ready' && (
+        <>
+          <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px solid ${C.gold}`, borderRadius: 10, boxShadow: '0 0 0 2000px rgba(0,0,0,0.4)' }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.75)', padding: '16px 20px calc(24px + env(safe-area-inset-bottom))' }}>
+            {ocr.phase === 'idle' && (
+              <button onClick={captureAndRead} className="tk-body" style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: C.vermillion, color: C.paper, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Fotografa e leggi il numero</button>
+            )}
+            {ocr.phase === 'working' && (
+              <div className="tk-body" style={{ color: C.paper, fontSize: 13, textAlign: 'center', padding: '13px 0' }}>Leggo il numero...</div>
+            )}
+            {ocr.phase === 'done' && (
+              <div>
+                <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 6 }}>
+                  {ocr.text ? 'Controlla e correggi se serve, poi conferma:' : 'Non sono riuscito a leggere nulla — scrivilo tu:'}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: e.target.value })} className="tk-mono"
+                    style={{ flex: 1, background: C.ink2, border: `1px solid ${C.gold}`, borderRadius: 10, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
+                  <button onClick={() => ocr.text.trim() && onDetected(ocr.text.trim())} className="tk-body" style={{ padding: '0 18px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Conferma</button>
+                </div>
+                <div onClick={() => setOcr({ phase: 'idle', text: '' })} className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 10, textAlign: 'center', cursor: 'pointer', textDecoration: 'underline' }}>riprova la foto</div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 function ScanResultView({ code, onBack, onScanAgain }) {
@@ -437,9 +513,11 @@ function RealCardRow({ card, onOpen }) {
   );
 }
 
-function RealBrowseView({ onOpenCard, onScan }) {
+function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
   const [query, setQuery] = useState('');
   const [state, setState] = useState({ status: 'loading', cards: [], error: null });
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualValue, setManualValue] = useState('');
 
   useEffect(() => {
     setState((s) => ({ ...s, status: 'loading' }));
@@ -464,6 +542,17 @@ function RealBrowseView({ onOpenCard, onScan }) {
           </div>
           <button onClick={onScan} style={{ width: 38, height: 38, borderRadius: 10, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona una carta gradata"><ScanLine size={17} color={C.paper} /></button>
         </div>
+        {!manualOpen ? (
+          <div onClick={() => setManualOpen(true)} className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 8, cursor: 'pointer', textDecoration: 'underline' }}>
+            oppure inserisci il numero certificato a mano
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <input value={manualValue} onChange={(e) => setManualValue(e.target.value)} placeholder="Numero certificato (es. 0018299244)" className="tk-mono"
+              style={{ flex: 1, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 12px', color: C.paper, fontSize: 13, outline: 'none' }} />
+            <button onClick={() => { if (manualValue.trim()) { onManualCode(manualValue.trim()); setManualValue(''); setManualOpen(false); } }} className="tk-body" style={{ padding: '0 16px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>Vai</button>
+          </div>
+        )}
       </div>
       <div style={{ position: 'relative', padding: '10px 16px 90px' }}>
         {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Cerco...</div>}
@@ -796,7 +885,7 @@ export default function TorekaPrototype() {
 
   let screen;
   if (view === 'home') screen = <HomeView onOpenCard={openCard} onOpenArticle={openArticle} onGoBrowse={() => nav('browse')} onOpenRealCard={openRealCard} />;
-  else if (view === 'browse') screen = <RealBrowseView onOpenCard={openRealCard} onScan={() => setView('scan')} />;
+  else if (view === 'browse') screen = <RealBrowseView onOpenCard={openRealCard} onScan={() => setView('scan')} onManualCode={(code) => { setScannedCode(code); setView('scanresult'); }} />;
   else if (view === 'scan') screen = <ScanView onBack={() => setView(navKey)} onDetected={(code) => { setScannedCode(code); setView('scanresult'); }} />;
   else if (view === 'scanresult') screen = <ScanResultView code={scannedCode} onBack={() => setView(navKey)} onScanAgain={() => setView('scan')} />;
   else if (view === 'realdetail') screen = <RealCardDetail key={selectedReal?.tcgdex_id} card={selectedReal} onBack={() => setView(navKey)} currency={currency} collection={collection} toggleCollection={toggleCollection} />;
