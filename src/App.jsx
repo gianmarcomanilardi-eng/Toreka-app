@@ -441,10 +441,13 @@ function RealBrowseView({ onOpenCard, onScan }) {
       <GridTexture />
       <div style={{ position: 'relative', padding: '18px 16px 8px' }}>
         <TopBar title="Toreka" subtitle="トレカ ・ catalogo reale" />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 12px', marginTop: 14 }}>
-          <Search size={15} color={C.mist} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca tra le carte vere..." className="tk-body"
-            style={{ background: 'transparent', border: 'none', outline: 'none', color: C.paper, fontSize: 13.5, width: '100%' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 12px' }}>
+            <Search size={15} color={C.mist} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca tra le carte vere..." className="tk-body"
+              style={{ background: 'transparent', border: 'none', outline: 'none', color: C.paper, fontSize: 13.5, width: '100%' }} />
+          </div>
+          <button onClick={onScan} style={{ width: 38, height: 38, borderRadius: 10, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona una carta gradata"><ScanLine size={17} color={C.paper} /></button>
         </div>
       </div>
       <div style={{ position: 'relative', padding: '10px 16px 90px' }}>
@@ -606,56 +609,6 @@ function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function BrowseView({ cards, onOpen, currency, setCurrency, query, setQuery, recentSearches, commitSearch }) {
-  return (
-    <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
-      <GridTexture />
-      <div style={{ position: 'relative', padding: '18px 16px 8px' }}>
-        <TopBar title="Toreka" subtitle="トレカ ・ mercato JP / CN" />
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 12px' }}>
-            <Search size={15} color={C.mist} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commitSearch(query)} onBlur={() => commitSearch(query)}
-              placeholder="Cerca una carta..." className="tk-body" style={{ background: 'transparent', border: 'none', outline: 'none', color: C.paper, fontSize: 13.5, width: '100%' }} />
-          </div>
-          <button onClick={onScan} style={{ width: 38, height: 38, borderRadius: 10, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona una carta gradata"><ScanLine size={17} color={C.paper} /></button>
-        </div>
-        {!query && recentSearches.length > 0 && (
-          <div style={{ marginTop: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}><Clock size={11} color={C.mist} /><span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>Ricerche recenti</span></div>
-            <div className="tk-hscroll" style={{ display: 'flex', gap: 6, overflowX: 'auto' }}>{recentSearches.map((t, i) => <button key={i} onClick={() => setQuery(t)} className="tk-body" style={{ fontSize: 11, padding: '5px 10px', borderRadius: 20, border: `1px solid ${C.line}`, background: 'transparent', color: C.mist, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>{t}</button>)}</div>
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>{Object.keys(SYMBOLS).map((cur) => <Chip key={cur} active={cur === currency} onClick={() => setCurrency(cur)}>{cur}</Chip>)}</div>
-      </div>
-      <div style={{ position: 'relative', padding: '10px 16px 4px', color: C.mist, fontSize: 11 }} className="tk-body">{cards.length} carte · aggiornato oggi</div>
-      <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '4px 16px 90px' }}>
-        {cards.map((c) => {
-          const e = c.editions[0];
-          const chg = quickChange30d(e, c.id);
-          return (
-            <div key={c.id} onClick={() => onOpen(c)} className="tk-rise" style={{ cursor: 'pointer', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10 }}>
-              <CardArt hue={(c.id * 47) % 360} label={e.name} imageUrl={e.imageUrl} />
-              <div style={{ marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600, lineHeight: 1.25 }}>{e.gloss || e.name}</div>
-                  {c.editions.length > 1 && <span title="Disponibile in più lingue"><Globe2 size={11} color={C.teal} /></span>}
-                </div>
-                <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 1 }}>{e.setCode} · {c.rarity}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                  <span className="tk-mono" style={{ color: C.paper, fontSize: 13, fontWeight: 700 }}>{fmt(e.basePrice, currency)}</span>
-                  <span className="tk-mono" style={{ fontSize: 10.5, fontWeight: 700, color: chg >= 0 ? C.jade : C.vermillion, display: 'flex', alignItems: 'center', gap: 2 }}>{chg >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{Math.abs(chg).toFixed(1)}%</span>
-                </div>
-                <div className="tk-body" style={{ color: C.mist, fontSize: 9.5, marginTop: 1 }}>rif. PSA 10 · 30gg</div>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
