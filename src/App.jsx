@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronLeft, Home, User, Wallet, TrendingUp, TrendingDown,
   CheckCircle2, ScanLine, Youtube, Quote, ArrowRight, Sparkles, Plus, Check, Clock, Globe2
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchRawCards } from './supabaseClient.js';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards, fetchCardsByIds } from './supabaseClient.js';
 
 /* ---------------------------------------------------------
    Design tokens
@@ -50,6 +51,10 @@ const RATES = { JPY: 1, USD: 1 / 155.2, EUR: 1 / 168.4, CNY: 1 / 21.6 };
 const SYMBOLS = { JPY: '¥', USD: '$', EUR: '€', CNY: 'CN¥' };
 function fmt(jpy, currency) { const v = jpy * RATES[currency]; if (currency === 'JPY') return `¥${Math.round(v).toLocaleString('ja-JP')}`; return `${SYMBOLS[currency]}${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`; }
 function fmtConverted(v, currency) { if (currency === 'JPY') return `¥${Math.round(v).toLocaleString('ja-JP')}`; return `${SYMBOLS[currency]}${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`; }
+function fmtFrom(amount, fromCurrency, toCurrency) {
+  const jpy = amount / (RATES[fromCurrency] ?? 1);
+  return fmtConverted(jpy * RATES[toCurrency], toCurrency);
+}
 const MONTHS_IT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
 function fmtDate(d, withYear = false) { if (!d) return ''; const s = `${d.getDate()} ${MONTHS_IT[d.getMonth()]}`; return withYear ? `${s} '${String(d.getFullYear()).slice(2)}` : s; }
 function seededRand(seed) { let s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
@@ -85,6 +90,7 @@ const CARDS = [
           { pf: 'eBay', co: 'CGC', g: 9.5, price: 49000, date: '5 lug' }, { pf: 'Yuyu-tei', co: 'PSA', g: 9, price: 30500, date: '2 lug' },
           { pf: 'Fanatics Collect', co: 'BGS', g: 10.5, price: 95000, date: '30 giu' }] },
       { lang: 'EN', name: 'Mew ex', set: 'Scarlet & Violet—151', setCode: 'MEW', num: '227/165', basePrice: 61000, drift: 0.15,
+        imageUrl: 'https://cdn.poketrace.com/cards/96b13860dec8d94b.webp',
         sales: [{ pf: 'eBay', co: 'PSA', g: 10, price: 59000, date: '9 lug' }, { pf: 'Fanatics Collect', co: 'PSA', g: 10, price: 63500, date: '5 lug' },
           { pf: 'eBay', co: 'CGC', g: 9.5, price: 41000, date: '1 lug' }] },
     ] },
@@ -149,11 +155,42 @@ function GradeSlab({ co, label, size = 'sm' }) {
 }
 function PlatformPill({ name }) { return <span className="tk-body" style={{ fontSize: 10.5, color: C.mist, border: `1px solid ${C.line}`, borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>{name}</span>; }
 function ConfirmedSeal() { return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: C.gold, fontSize: 10.5 }}><CheckCircle2 size={12} strokeWidth={2.5} /><span className="tk-body" style={{ fontWeight: 600 }}>confermato</span></span>; }
-function CardArt({ hue = 0, label, round = false }) {
+function CardArt({ hue = 0, label, round = false, imageUrl = null }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = imageUrl && !imgFailed;
   return (
-    <div style={{ width: '100%', aspectRatio: round ? '1 / 1' : '5 / 7', borderRadius: round ? '50%' : 10, background: `linear-gradient(155deg, hsl(${hue},48%,24%), ${C.ink3} 75%)`, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-      {!round && <div style={{ position: 'absolute', inset: 8, border: `1px solid ${C.gold}55`, borderRadius: 6 }} />}
-      <span className="tk-display" style={{ color: `${C.paper}77`, fontSize: round ? 20 : 13, fontWeight: 600, textAlign: 'center', padding: 10 }}>{label}</span>
+    <div style={{
+      width: '100%', aspectRatio: round ? '1 / 1' : '5 / 7', borderRadius: round ? '50%' : 12,
+      boxShadow: '0 10px 22px rgba(0,0,0,0.38), 0 3px 8px rgba(0,0,0,0.3)', position: 'relative',
+    }}>
+      <div style={{
+        width: '100%', height: '100%', borderRadius: round ? '50%' : 12,
+        background: showImage ? C.ink3 : `linear-gradient(155deg, hsl(${hue},48%,24%), ${C.ink3} 75%)`,
+        border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        {showImage ? (
+          <img
+            src={imageUrl}
+            alt={label}
+            onError={() => setImgFailed(true)}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <>
+            {!round && <div style={{ position: 'absolute', inset: 6, border: `1.5px solid ${C.gold}66`, borderRadius: 8 }} />}
+            <span className="tk-display" style={{ color: `${C.paper}77`, fontSize: round ? 20 : 13, fontWeight: 600, textAlign: 'center', padding: 10 }}>{label}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+function Disclaimer() {
+  return (
+    <div className="tk-body" style={{ color: C.mist, fontSize: 9.5, textAlign: 'center', lineHeight: 1.5, padding: '18px 20px 4px', opacity: 0.7 }}>
+      Toreka non è affiliata con Nintendo, The Pokémon Company, Creatures Inc., PSA, BGS, CGC o TAG.
+      Nomi e loghi Pokémon sono marchi dei rispettivi proprietari, usati solo a scopo di identificazione e consultazione prezzi.
     </div>
   );
 }
@@ -185,43 +222,47 @@ function quickChange30d(edition, id) { const s = buildSeries(edition.basePrice, 
 /* ---------------------------------------------------------
    Views
 ---------------------------------------------------------- */
-function HomeView({ onOpenCard, onOpenArticle, onGoBrowse }) {
-  const movers = useMemo(() => CARDS.map((c) => ({ c, e: c.editions[0], chg: quickChange30d(c.editions[0], c.id) })).sort((a, b) => b.chg - a.chg), []);
-  const top = movers[0], worst = movers[movers.length - 1];
-  const feature = CARDS[0];
+function HomeView({ onOpenCard, onOpenArticle, onGoBrowse, onOpenRealCard }) {
+  const [real, setReal] = useState({ status: 'loading', cards: [] });
+  useEffect(() => {
+    fetchFeaturedRealCards(6)
+      .then((cards) => setReal({ status: 'ok', cards }))
+      .catch((error) => setReal({ status: 'error', cards: [], error: error.message || String(error) }));
+  }, []);
+
   return (
     <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
       <GridTexture />
       <div style={{ position: 'relative', padding: '18px 16px 90px' }}>
         <TopBar title="Toreka" subtitle="トレカ ・ mercato JP / CN" />
-        <div className="tk-rise" style={{ ...PANEL, ...topAccent(C.gold), borderRadius: 14, padding: 14, marginTop: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}><Sparkles size={13} color={C.gold} /><span className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1.5 }}>MERCATO OGGI</span></div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div onClick={() => onOpenCard(top.c)} style={{ flex: 1, cursor: 'pointer' }}>
-              <div className="tk-body" style={{ color: C.mist, fontSize: 9.5 }}>Miglior 30gg</div>
-              <div className="tk-body" style={{ color: C.paper, fontSize: 12, fontWeight: 600, marginTop: 2 }}>{top.e.gloss || top.e.name}</div>
-              <div className="tk-mono" style={{ color: C.jade, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}><TrendingUp size={12} />+{top.chg.toFixed(1)}%</div>
-            </div>
-            <div style={{ width: 1, background: C.line }} />
-            <div onClick={() => onOpenCard(worst.c)} style={{ flex: 1, cursor: 'pointer' }}>
-              <div className="tk-body" style={{ color: C.mist, fontSize: 9.5 }}>Peggior 30gg</div>
-              <div className="tk-body" style={{ color: C.paper, fontSize: 12, fontWeight: 600, marginTop: 2 }}>{worst.e.gloss || worst.e.name}</div>
-              <div className="tk-mono" style={{ color: C.vermillion, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}><TrendingDown size={12} />{worst.chg.toFixed(1)}%</div>
-            </div>
-          </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 10 }}>
+          <span className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5 }}>LE PIÙ QUOTATE ORA</span>
+          <span onClick={onGoBrowse} className="tk-body" style={{ color: C.mist, fontSize: 10.5, cursor: 'pointer' }}>tutte le carte →</span>
         </div>
-        <div className="tk-rise" onClick={() => onOpenCard(feature)} style={{ ...PANEL, ...topAccent(C.gold), borderRadius: 14, padding: 14, marginTop: 12, cursor: 'pointer', display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ width: 64 }}><CardArt hue={(feature.id * 47) % 360} label={feature.editions[0].name} /></div>
-          <div style={{ flex: 1 }}>
-            <span className="tk-mono" style={{ color: C.gold, fontSize: 9, letterSpacing: 1.5 }}>IN EVIDENZA</span>
-            <div className="tk-body" style={{ color: C.paper, fontSize: 13.5, fontWeight: 700, marginTop: 2 }}>{feature.editions[0].gloss || feature.editions[0].name}</div>
-            <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 1 }}>{feature.editions[0].set} · rif. {fmt(feature.editions[0].basePrice, 'JPY')}</div>
+        {real.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12, textAlign: 'center', padding: 20 }}>Carico dal database...</div>}
+        {real.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{real.error}</div>}
+        {real.status === 'ok' && real.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna carta ancora nel database.</div>}
+        {real.status === 'ok' && (
+          <div className="tk-rise" style={{ ...PANEL, ...topAccent(C.gold), borderRadius: 14, overflow: 'hidden' }}>
+            {real.cards.map((c, i) => (
+              <div key={c.tcgdex_id} onClick={() => onOpenRealCard(c)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: 12, cursor: 'pointer',
+                borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
+              }}>
+                <div style={{ width: 38 }}><CardArt hue={(c.tcgdex_id.length * 37) % 360} label={(c.name_en || c.name || '?').slice(0, 2)} imageUrl={c.image_url} /></div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name_en || c.name}</div>
+                  <div className="tk-body" style={{ color: C.mist, fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.set_name || c.set_code}</div>
+                </div>
+                <ArrowRight size={14} color={C.mist} />
+              </div>
+            ))}
           </div>
-          <ArrowRight size={16} color={C.mist} />
-        </div>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 10 }}>
           <span className="tk-mono" style={{ color: C.teal, fontSize: 10.5, letterSpacing: 1.5 }}>DALLA COMMUNITY</span>
-          <span onClick={onGoBrowse} className="tk-body" style={{ color: C.mist, fontSize: 10.5, cursor: 'pointer' }}>tutte le carte →</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {INTERVIEWS.map((it) => it.comingSoon ? (
@@ -241,6 +282,7 @@ function HomeView({ onOpenCard, onOpenArticle, onGoBrowse }) {
             </div>
           ))}
         </div>
+        <Disclaimer />
       </div>
     </div>
   );
@@ -291,12 +333,196 @@ function ComingSoonView({ label }) {
 // collegato — mostra i dati grezzi così come arrivano, senza vestirli
 // con la grafica delle altre schermate (quelle restano sui dati finti
 // finché non decidiamo insieme come unire le due cose).
+function ScanView({ onBack, onDetected }) {
+  const videoRef = useRef(null);
+  const [status, setStatus] = useState('starting'); // starting | scanning | error
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    const reader = new BrowserMultiFormatReader();
+
+    reader.decodeFromConstraints(
+      { video: { facingMode: 'environment' } },
+      videoRef.current,
+      (result) => {
+        if (!active || !result) return;
+        active = false;
+        onDetected(result.getText());
+      }
+    ).then(() => { if (active) setStatus('scanning'); })
+      .catch((e) => { if (active) { setStatus('error'); setError(e.message || String(e)); } });
+
+    return () => { active = false; try { reader.reset(); } catch (e) {} };
+  }, [onDetected]);
+
+  return (
+    <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 2, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={onBack} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
+        <span className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600 }}>Inquadra il codice sulla slab</span>
+      </div>
+      <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      {status === 'starting' && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span className="tk-body" style={{ color: C.paper, fontSize: 13 }}>Avvio fotocamera...</span>
+        </div>
+      )}
+      {status === 'error' && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, textAlign: 'center', lineHeight: 1.6 }}>
+            Non riesco ad accedere alla fotocamera.<br /><span style={{ color: C.mist, fontSize: 11 }}>{error}</span><br /><br />
+            Controlla di aver dato il permesso della fotocamera a Toreka (Safari → Impostazioni sito).
+          </div>
+        </div>
+      )}
+      {status === 'scanning' && (
+        <div style={{ position: 'absolute', top: '32%', left: '15%', right: '15%', bottom: '42%', border: `2px solid ${C.gold}`, borderRadius: 12, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }} />
+      )}
+    </div>
+  );
+}
+
+function ScanResultView({ code, onBack, onScanAgain }) {
+  return (
+    <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
+      <GridTexture />
+      <div style={{ position: 'relative', padding: '18px 16px 90px' }}>
+        <button onClick={onBack} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
+        <div style={{ marginTop: 30, textAlign: 'center' }}>
+          <CheckCircle2 size={40} color={C.jade} />
+          <div className="tk-display" style={{ color: C.paper, fontSize: 18, fontWeight: 700, marginTop: 12 }}>Codice letto</div>
+          <div className="tk-mono" style={{ color: C.gold, fontSize: 18, fontWeight: 700, marginTop: 10, wordBreak: 'break-all' }}>{code}</div>
+        </div>
+        <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26 }}>
+          <div className="tk-body" style={{ color: C.mist, fontSize: 12, lineHeight: 1.6 }}>
+            La lettura funziona davvero — questo è il codice vero appena letto dalla fotocamera.
+            Il collegamento automatico a PSA/BGS/CGC per capire a quale carta corrisponde non è ancora
+            costruito — è il prossimo pezzo separato di cui parlavamo.
+          </div>
+        </div>
+        <button onClick={onScanAgain} className="tk-body" style={{ width: '100%', marginTop: 16, padding: '12px 0', borderRadius: 10, cursor: 'pointer', border: `1px solid ${C.gold}`, background: `${C.gold}22`, color: C.gold, fontWeight: 600, fontSize: 13 }}>
+          Scansiona un'altra carta
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RealCardRow({ card, onOpen }) {
+  return (
+    <div onClick={() => onOpen(card)} className="tk-rise" style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10 }}>
+      <div style={{ width: 46 }}><CardArt hue={(card.tcgdex_id.length * 37) % 360} label={(card.name_en || card.name || '?').slice(0, 2)} imageUrl={card.image_url} /></div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.name_en || card.name}</div>
+        <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.set_name || card.set_code} {card.rarity ? `· ${card.rarity}` : ''}</div>
+      </div>
+      {!card.tcgdex_id.startsWith('yuyu-') && <span title="Abbinata a catalogo" style={{ flexShrink: 0 }}><CheckCircle2 size={14} color={C.jade} /></span>}
+    </div>
+  );
+}
+
+function RealBrowseView({ onOpenCard, onScan }) {
+  const [query, setQuery] = useState('');
+  const [state, setState] = useState({ status: 'loading', cards: [], error: null });
+
+  useEffect(() => {
+    setState((s) => ({ ...s, status: 'loading' }));
+    const timer = setTimeout(() => {
+      searchRealCards(query)
+        .then((cards) => setState({ status: 'ok', cards, error: null }))
+        .catch((error) => setState({ status: 'error', cards: [], error: error.message || String(error) }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  return (
+    <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
+      <GridTexture />
+      <div style={{ position: 'relative', padding: '18px 16px 8px' }}>
+        <TopBar title="Toreka" subtitle="トレカ ・ catalogo reale" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 12px', marginTop: 14 }}>
+          <Search size={15} color={C.mist} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca tra le carte vere..." className="tk-body"
+            style={{ background: 'transparent', border: 'none', outline: 'none', color: C.paper, fontSize: 13.5, width: '100%' }} />
+        </div>
+      </div>
+      <div style={{ position: 'relative', padding: '10px 16px 90px' }}>
+        {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Cerco...</div>}
+        {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{state.error}</div>}
+        {state.status === 'ok' && (
+          <>
+            <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 8 }}>{state.cards.length} risultati {!query && '(ultime aggiunte — scrivi per cercare tra tutte)'}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {state.cards.map((c) => <RealCardRow key={c.tcgdex_id} card={c} onOpen={onOpenCard} />)}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RealCardDetail({ card, onBack, currency, collection = [], toggleCollection }) {
+  const [state, setState] = useState({ status: 'loading', prices: [], error: null });
+  useEffect(() => {
+    fetchCardPrices(card.tcgdex_id)
+      .then((prices) => setState({ status: 'ok', prices, error: null }))
+      .catch((error) => setState({ status: 'error', prices: [], error: error.message || String(error) }));
+  }, [card.tcgdex_id]);
+  const inColl = collection.includes(card.tcgdex_id);
+
+  return (
+    <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
+      <GridTexture />
+      <div style={{ position: 'relative', padding: '18px 16px 4px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={onBack} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
+        <div className="tk-body" style={{ color: C.mist, fontSize: 11.5 }}>{card.set_name || card.set_code} {card.local_id ? `· ${card.local_id}` : ''}</div>
+      </div>
+      <div className="tk-rise" style={{ position: 'relative', padding: '10px 16px 0' }}>
+        <div style={{ width: 130, margin: '0 auto' }}><CardArt hue={(card.tcgdex_id.length * 37) % 360} label={(card.name_en || card.name || '?').slice(0, 2)} imageUrl={card.image_url} /></div>
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <div className="tk-display" style={{ color: C.paper, fontSize: 19, fontWeight: 700 }}>{card.name_en || card.name}</div>
+          {card.name_en && card.name !== card.name_en && <div className="tk-body" style={{ color: C.mist, fontSize: 12, marginTop: 2 }}>{card.name}</div>}
+          {card.tcgdex_id.startsWith('yuyu-') && (
+            <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 8, fontStyle: 'italic' }}>Non ancora abbinata a un catalogo — nome originale dalla fonte.</div>
+          )}
+        </div>
+        <button onClick={() => toggleCollection(card.tcgdex_id)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
+          {inColl ? <Check size={15} /> : <Plus size={15} />}<span style={{ fontWeight: 600, fontSize: 13 }}>{inColl ? 'Nella tua collezione' : 'Aggiungi alla collezione'}</span>
+        </button>
+        <div style={{ marginTop: 22, marginBottom: 90 }}>
+          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>PREZZI OSSERVATI</div>
+          {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Carico...</div>}
+          {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{state.error}</div>}
+          {state.status === 'ok' && state.prices.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessun prezzo registrato per questa carta.</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {state.prices.map((p) => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <PlatformPill name={p.source} />
+                    <span className="tk-mono" style={{ color: C.mist, fontSize: 10 }}>{p.grade_company ? `${p.grade_company} ${p.grade}` : 'raw'}</span>
+                    <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{new Date(p.observed_at).toLocaleDateString('it-IT')}</span>
+                  </div>
+                  <div style={{ marginTop: 4 }}>{p.confirmed ? <ConfirmedSeal /> : <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>prezzo di listino</span>}</div>
+                </div>
+                <span className="tk-mono" style={{ color: C.paper, fontSize: 14, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DbTestView() {
-  const [state, setState] = useState({ status: 'loading', cards: [], prices: [], error: null });
+  const [state, setState] = useState({ status: 'loading', cards: [], prices: [], cardsCount: 0, pricesCount: 0, error: null });
   useEffect(() => {
     fetchRawCards()
-      .then(({ cards, prices }) => setState({ status: 'ok', cards, prices, error: null }))
-      .catch((error) => setState({ status: 'error', cards: [], prices: [], error: error.message || String(error) }));
+      .then(({ cards, prices, cardsCount, pricesCount }) => setState({ status: 'ok', cards, prices, cardsCount, pricesCount, error: null }))
+      .catch((error) => setState({ status: 'error', cards: [], prices: [], cardsCount: 0, pricesCount: 0, error: error.message || String(error) }));
   }, []);
 
   return (
@@ -312,10 +538,13 @@ function DbTestView() {
         )}
         {state.status === 'ok' && (
           <div style={{ marginTop: 16 }}>
-            <div className="tk-body" style={{ color: C.jade, fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
-              Collegato! {state.cards.length} carte, {state.prices.length} prezzi trovati.
+            <div className="tk-body" style={{ color: C.jade, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+              Collegato! {state.cardsCount.toLocaleString('it-IT')} carte totali, {state.pricesCount.toLocaleString('it-IT')} prezzi totali nel database.
             </div>
-            {state.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Il database risponde ma è vuoto — manca ancora l'INSERT di prova (o i dati veri).</div>}
+            <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 12 }}>
+              Qui sotto solo un campione di {state.cards.length} — mostrarle tutte in un elenco non sarebbe comunque leggibile.
+            </div>
+            {state.cardsCount === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Il database risponde ma è vuoto — manca ancora l'INSERT di prova (o i dati veri).</div>}
             {state.cards.map((c) => (
               <div key={c.tcgdex_id} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
                 <div className="tk-body" style={{ color: C.paper, fontWeight: 600, fontSize: 13 }}>{c.name} {c.name_en && `(${c.name_en})`}</div>
@@ -335,11 +564,17 @@ function DbTestView() {
 }
 
 function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
-  const total = collection.reduce((sum, entry) => {
-    const card = CARDS.find((c) => c.id === entry.cardId);
-    const edition = card?.editions.find((e) => e.lang === entry.lang);
-    return edition ? sum + edition.basePrice * (MULT[entry.company][entry.grade] ?? 1) : sum;
-  }, 0);
+  const [state, setState] = useState({ status: 'loading', cards: [] });
+  useEffect(() => {
+    if (!collection.length) { setState({ status: 'ok', cards: [] }); return; }
+    setState((s) => ({ ...s, status: 'loading' }));
+    fetchCardsByIds(collection)
+      .then((cards) => setState({ status: 'ok', cards }))
+      .catch((error) => setState({ status: 'error', cards: [], error: error.message || String(error) }));
+  }, [collection]);
+
+  const total = state.cards.reduce((sum, c) => sum + (c.latestPrice ? c.latestPrice.price / (RATES[c.latestPrice.currency] ?? 1) : 0), 0);
+
   return (
     <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
       <GridTexture />
@@ -348,31 +583,27 @@ function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
         <div className="tk-rise" style={{ ...PANEL, ...topAccent(C.gold), borderRadius: 14, padding: 16, marginTop: 16 }}>
           <span className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1.5 }}>VALORE TOTALE</span>
           <div className="tk-mono" style={{ color: C.paper, fontSize: 28, fontWeight: 700, marginTop: 4 }}>{fmtConverted(total * RATES[currency], currency)}</div>
-          <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 2 }}>{collection.length} {collection.length === 1 ? 'carta' : 'carte'} in collezione</div>
+          <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 2 }}>{collection.length} {collection.length === 1 ? 'carta' : 'carte'} in collezione · valore in base all'ultimo prezzo osservato</div>
         </div>
-        {collection.length === 0 ? (
+        {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, marginTop: 16 }}>{state.error}</div>}
+        {state.status === 'ok' && collection.length === 0 && (
           <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 60, lineHeight: 1.6 }}>La tua collezione è vuota.<br />Aggiungi una carta dalla sua scheda.</div>
-        ) : (
+        )}
+        {state.status === 'ok' && collection.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-            {collection.map((entry, i) => {
-              const card = CARDS.find((c) => c.id === entry.cardId); if (!card) return null;
-              const edition = card.editions.find((e) => e.lang === entry.lang); if (!edition) return null;
-              const val = edition.basePrice * (MULT[entry.company][entry.grade] ?? 1);
-              const label = GRADE_SCALES[entry.company].find((x) => x.g === entry.grade)?.label;
-              return (
-                <div key={i} onClick={() => onOpenCard(card)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, cursor: 'pointer' }}>
-                  <div style={{ width: 44 }}><CardArt hue={(card.id * 47) % 360} label={edition.name} /></div>
-                  <div style={{ flex: 1 }}>
-                    <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600 }}>{edition.gloss || edition.name} <span style={{ color: C.mist, fontWeight: 400 }}>({entry.lang})</span></div>
-                    <div style={{ marginTop: 3 }}><GradeSlab co={entry.company} label={label} /></div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="tk-mono" style={{ color: C.paper, fontSize: 13, fontWeight: 700 }}>{fmtConverted(val * RATES[currency], currency)}</div>
-                    <button onClick={(ev) => { ev.stopPropagation(); onRemove(i); }} className="tk-body" style={{ background: 'none', border: 'none', color: C.vermillion, fontSize: 10, cursor: 'pointer', marginTop: 3, padding: 0 }}>rimuovi</button>
-                  </div>
+            {state.cards.map((c) => (
+              <div key={c.tcgdex_id} onClick={() => onOpenCard(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+                <div style={{ width: 44 }}><CardArt hue={(c.tcgdex_id.length * 37) % 360} label={(c.name_en || c.name || '?').slice(0, 2)} imageUrl={c.image_url} /></div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name_en || c.name}</div>
+                  <div className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{c.latestPrice ? `${c.latestPrice.grade_company ? c.latestPrice.grade_company + ' ' + c.latestPrice.grade : 'raw'} · ${c.latestPrice.source}` : 'nessun prezzo osservato'}</div>
                 </div>
-              );
-            })}
+                <div style={{ textAlign: 'right' }}>
+                  <div className="tk-mono" style={{ color: C.paper, fontSize: 13, fontWeight: 700 }}>{c.latestPrice ? fmtFrom(c.latestPrice.price, c.latestPrice.currency, currency) : '—'}</div>
+                  <button onClick={(ev) => { ev.stopPropagation(); onRemove(c.tcgdex_id); }} className="tk-body" style={{ background: 'none', border: 'none', color: C.vermillion, fontSize: 10, cursor: 'pointer', marginTop: 3, padding: 0 }}>rimuovi</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -392,7 +623,7 @@ function BrowseView({ cards, onOpen, currency, setCurrency, query, setQuery, rec
             <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commitSearch(query)} onBlur={() => commitSearch(query)}
               placeholder="Cerca una carta..." className="tk-body" style={{ background: 'transparent', border: 'none', outline: 'none', color: C.paper, fontSize: 13.5, width: '100%' }} />
           </div>
-          <button style={{ width: 38, height: 38, borderRadius: 10, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona (anteprima non funzionante)"><ScanLine size={17} color={C.paper} /></button>
+          <button onClick={onScan} style={{ width: 38, height: 38, borderRadius: 10, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona una carta gradata"><ScanLine size={17} color={C.paper} /></button>
         </div>
         {!query && recentSearches.length > 0 && (
           <div style={{ marginTop: 10 }}>
@@ -409,7 +640,7 @@ function BrowseView({ cards, onOpen, currency, setCurrency, query, setQuery, rec
           const chg = quickChange30d(e, c.id);
           return (
             <div key={c.id} onClick={() => onOpen(c)} className="tk-rise" style={{ cursor: 'pointer', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10 }}>
-              <CardArt hue={(c.id * 47) % 360} label={e.name} />
+              <CardArt hue={(c.id * 47) % 360} label={e.name} imageUrl={e.imageUrl} />
               <div style={{ marginTop: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600, lineHeight: 1.25 }}>{e.gloss || e.name}</div>
@@ -483,7 +714,7 @@ function DetailView({ card, onBack, currency, setCurrency, collection, toggleCol
       </div>
       <div className="tk-rise" style={{ position: 'relative', padding: '10px 16px 0' }}>
         <div style={{ width: 130, margin: '0 auto', position: 'relative' }}>
-          <CardArt hue={(card.id * 47) % 360} label={edition.name} />
+          <CardArt hue={(card.id * 47) % 360} label={edition.name} imageUrl={edition.imageUrl} />
         </div>
 
         {/* Ristampe / lingue — stile Cardmarket: stessa carta, edizioni diverse */}
@@ -560,6 +791,8 @@ export default function TorekaPrototype() {
   const [view, setView] = useState('home');
   const [navKey, setNavKey] = useState('home');
   const [selected, setSelected] = useState(null);
+  const [selectedReal, setSelectedReal] = useState(null);
+  const [scannedCode, setScannedCode] = useState(null);
   const [article, setArticle] = useState(null);
   const [currency, setCurrency] = useState('JPY');
   const [query, setQuery] = useState('');
@@ -573,11 +806,9 @@ export default function TorekaPrototype() {
 
   function persistCollection(next) { setCollection(next); try { localStorage.setItem('toreka_collection', JSON.stringify(next)); } catch (e) {} }
   function persistRecent(next) { setRecentSearches(next); try { localStorage.setItem('toreka_recent_searches', JSON.stringify(next)); } catch (e) {} }
-  function toggleCollection(cardId, lang, company, grade) {
-    const exists = collection.some((e) => e.cardId === cardId && e.lang === lang && e.company === company && e.grade === grade);
-    const next = exists
-      ? collection.filter((e) => !(e.cardId === cardId && e.lang === lang && e.company === company && e.grade === grade))
-      : [...collection, { cardId, lang, company, grade }];
+  function toggleCollection(tcgdexId) {
+    const exists = collection.includes(tcgdexId);
+    const next = exists ? collection.filter((id) => id !== tcgdexId) : [...collection, tcgdexId];
     persistCollection(next);
   }
   function commitSearch(q) { const term = q.trim(); if (!term) return; const next = [term, ...recentSearches.filter((t) => t.toLowerCase() !== term.toLowerCase())].slice(0, 6); persistRecent(next); }
@@ -592,14 +823,18 @@ export default function TorekaPrototype() {
 
   function nav(k) { setNavKey(k); setView(k); }
   function openCard(c) { setSelected(c); setView('detail'); }
+  function openRealCard(c) { setSelectedReal(c); setView('realdetail'); }
   function openArticle(a) { setArticle(a); setView('article'); }
 
   let screen;
-  if (view === 'home') screen = <HomeView onOpenCard={openCard} onOpenArticle={openArticle} onGoBrowse={() => nav('browse')} />;
-  else if (view === 'browse') screen = <BrowseView cards={filtered} onOpen={openCard} currency={currency} setCurrency={setCurrency} query={query} setQuery={setQuery} recentSearches={recentSearches} commitSearch={commitSearch} />;
+  if (view === 'home') screen = <HomeView onOpenCard={openCard} onOpenArticle={openArticle} onGoBrowse={() => nav('browse')} onOpenRealCard={openRealCard} />;
+  else if (view === 'browse') screen = <RealBrowseView onOpenCard={openRealCard} onScan={() => setView('scan')} />;
+  else if (view === 'scan') screen = <ScanView onBack={() => setView(navKey)} onDetected={(code) => { setScannedCode(code); setView('scanresult'); }} />;
+  else if (view === 'scanresult') screen = <ScanResultView code={scannedCode} onBack={() => setView(navKey)} onScanAgain={() => setView('scan')} />;
+  else if (view === 'realdetail') screen = <RealCardDetail key={selectedReal?.tcgdex_id} card={selectedReal} onBack={() => setView(navKey)} currency={currency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'detail') screen = <DetailView key={selected?.id} card={selected} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'article') screen = <ArticleView key={article?.id} item={article} onBack={() => setView(navKey)} />;
-  else if (view === 'portfolio') screen = <PortfolioView collection={collection} onRemove={(i) => persistCollection(collection.filter((_, idx) => idx !== i))} onOpenCard={openCard} currency={currency} />;
+  else if (view === 'portfolio') screen = <PortfolioView collection={collection} onRemove={(id) => toggleCollection(id)} onOpenCard={openRealCard} currency={currency} />;
   else screen = <DbTestView />;
 
   return (
