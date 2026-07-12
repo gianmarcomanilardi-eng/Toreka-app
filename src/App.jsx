@@ -445,7 +445,7 @@ function TextScanMode({ onDetected, certInfo }) {
   const streamRef = useRef(null);
   const [status, setStatus] = useState('starting'); // starting | ready | error
   const [error, setError] = useState('');
-  const [ocr, setOcr] = useState({ phase: 'idle', text: '' }); // idle | working | done
+  const [ocr, setOcr] = useState({ phase: 'idle', text: '', candidates: [] }); // idle | working | done
 
   useEffect(() => {
     let active = true;
@@ -461,56 +461,65 @@ function TextScanMode({ onDetected, certInfo }) {
     return () => { active = false; if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop()); };
   }, []);
 
-  function preprocess(canvas) {
-    // scala di grigi + contrasto netto (bianco/nero) — tecnica standard
-    // per aiutare l'OCR su superfici lucide con riflessi, non specifica
-    // di questa libreria: funziona così ovunque si faccia OCR da foto.
+  function toGrayscaleVariant(baseCanvas, threshold) {
+    // parte sempre dalla STESSA foto, cambia solo come viene preparata:
+    // threshold=null lascia i grigi naturali; un numero applica una
+    // soglia bianco/nero diversa — livelli diversi di contrasto possono
+    // far leggere meglio o peggio la stessa identica immagine.
+    const canvas = document.createElement('canvas');
+    canvas.width = baseCanvas.width;
+    canvas.height = baseCanvas.height;
     const ctx = canvas.getContext('2d');
+    ctx.drawImage(baseCanvas, 0, 0);
     const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
     for (let i = 0; i < img.data.length; i += 4) {
       const gray = img.data[i] * 0.3 + img.data[i + 1] * 0.59 + img.data[i + 2] * 0.11;
-      const bw = gray > 140 ? 255 : 0; // soglia netta bianco/nero, riduce l'effetto dei riflessi
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = bw;
+      const val = threshold === null ? gray : (gray > threshold ? 255 : 0);
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = val;
     }
     ctx.putImageData(img, 0, 0);
+    return canvas;
+  }
+
+  async function readFromCanvas(canvas) {
+    const Tesseract = await import('tesseract.js');
+    const worker = await Tesseract.createWorker('eng');
+    await worker.setParameters({ tessedit_char_whitelist: '0123456789 .', tessedit_pageseg_mode: '11' });
+    const { data } = await worker.recognize(canvas);
+    await worker.terminate();
+    const groups = (data.text || '').split(/[^0-9]+/).filter(Boolean);
+    const [minLen, maxLen] = certInfo ? certInfo.digits : [0, 99];
+    const goodMatch = groups.find((g) => g.length >= minLen && g.length <= maxLen);
+    return goodMatch || groups.sort((a, b) => b.length - a.length)[0] || '';
   }
 
   async function captureAndRead() {
-    setOcr({ phase: 'working', text: '' });
+    setOcr({ phase: 'working', text: '', candidates: [] });
+    // UNO scatto solo — da quello, quattro modi diversi di prepararlo
+    // prima di leggerlo, e voto tra i quattro risultati. Niente foto
+    // ripetute: la variazione viene dalla preparazione, non dallo scatto.
     const video = videoRef.current;
-    // fotogramma intero, non più ritagliato — la prima volta, senza
-    // ritaglio, aveva letto correttamente: restringere troppo peggiorava.
-    // Lo ingrandisco 2x prima di leggerlo: testo più grande = di solito
-    // riconoscimento più preciso, tecnica standard per l'OCR da foto.
     const scale = 2;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth * scale;
-    canvas.height = video.videoHeight * scale;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-    preprocess(canvas);
+    const base = document.createElement('canvas');
+    base.width = video.videoWidth * scale;
+    base.height = video.videoHeight * scale;
+    base.getContext('2d').drawImage(video, 0, 0, base.width, base.height);
+
+    const variants = [120, 140, 165, null].map((t) => toGrayscaleVariant(base, t));
+    const results = [];
     try {
-      const Tesseract = await import('tesseract.js');
-      const worker = await Tesseract.createWorker('eng');
-      await worker.setParameters({
-        tessedit_char_whitelist: '0123456789 .',
-        // "testo sparso" invece di "pagina intera": l'etichetta ha più
-        // numeri separati vicini, non un unico blocco di testo — questa
-        // modalità li cerca uno per uno invece di provare a ricostruire
-        // un layout di pagina, più adatta a questo caso.
-        tessedit_pageseg_mode: '11',
-      });
-      const { data } = await worker.recognize(canvas);
-      await worker.terminate();
-      // spezza in gruppi di sole cifre (lo spazio/punto fa da separatore)
-      const groups = (data.text || '').split(/[^0-9]+/).filter(Boolean);
-      // preferisce il gruppo con la lunghezza giusta per la casa scelta;
-      // se nessuno combacia, prende il più lungo trovato.
-      const [minLen, maxLen] = certInfo ? certInfo.digits : [0, 99];
-      const goodMatch = groups.find((g) => g.length >= minLen && g.length <= maxLen);
-      const cleaned = goodMatch || groups.sort((a, b) => b.length - a.length)[0] || '';
-      setOcr({ phase: 'done', text: cleaned });
-    } catch (e) {
-      setOcr({ phase: 'done', text: '' });
+      for (const v of variants) results.push(await readFromCanvas(v));
+    } catch (e) { /* prosegue con quello che è riuscito a leggere finora */ }
+
+    const counts = {};
+    for (const r of results) if (r) counts[r] = (counts[r] || 0) + 1;
+    const majority = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+
+    if (majority && counts[majority] >= 2) {
+      setOcr({ phase: 'done', text: majority, candidates: [] });
+    } else {
+      const unique = [...new Set(results.filter(Boolean))];
+      setOcr({ phase: 'done', text: unique[0] || '', candidates: unique });
     }
   }
 
@@ -535,19 +544,30 @@ function TextScanMode({ onDetected, certInfo }) {
               <button onClick={captureAndRead} className="tk-body" style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: C.vermillion, color: C.paper, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Fotografa e leggi il numero</button>
             )}
             {ocr.phase === 'working' && (
-              <div className="tk-body" style={{ color: C.paper, fontSize: 13, textAlign: 'center', padding: '13px 0' }}>Leggo il numero...</div>
+              <div className="tk-body" style={{ color: C.paper, fontSize: 13, textAlign: 'center', padding: '13px 0' }}>Analizzo la foto in più modi...</div>
             )}
             {ocr.phase === 'done' && (
               <div>
                 <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 6 }}>
-                  {!ocr.text ? 'Non sono riuscito a leggere nulla — scrivilo tu:' : lenOk ? 'Controlla e correggi se serve, poi conferma:' : `Ha letto ${ocr.text.length} cifre, ma ${certInfo ? `di solito sono ${certInfo.digits[0]}-${certInfo.digits[1]}` : 'sembrano poche'} — probabile lettura sbagliata, correggi prima di confermare:`}
+                  {ocr.candidates.length > 1
+                    ? 'Letture diverse tra loro, non sono sicuro — tocca quella giusta o correggi a mano:'
+                    : !ocr.text ? 'Non sono riuscito a leggere nulla — scrivilo tu:'
+                    : lenOk ? 'Più letture della stessa foto coincidevano — controlla e conferma:'
+                    : `Ha letto ${ocr.text.length} cifre, ma ${certInfo ? `di solito sono ${certInfo.digits[0]}-${certInfo.digits[1]}` : 'sembrano poche'} — probabile lettura sbagliata, correggi prima di confermare:`}
                 </div>
+                {ocr.candidates.length > 1 && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    {ocr.candidates.map((c) => (
+                      <button key={c} onClick={() => setOcr({ ...ocr, text: c })} className="tk-mono" style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: c === ocr.text ? C.gold : C.ink2, color: c === ocr.text ? C.ink : C.paper, fontSize: 13, cursor: 'pointer' }}>{c}</button>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: e.target.value.replace(/[^0-9]/g, '') })} inputMode="numeric" pattern="[0-9]*" className="tk-mono"
                     style={{ flex: 1, background: C.ink2, border: `1px solid ${lenOk ? C.gold : C.vermillion}`, borderRadius: 10, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
                   <button onClick={() => ocr.text.trim() && onDetected(ocr.text.trim())} className="tk-body" style={{ padding: '0 18px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Conferma</button>
                 </div>
-                <div onClick={() => setOcr({ phase: 'idle', text: '' })} className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 10, textAlign: 'center', cursor: 'pointer', textDecoration: 'underline' }}>riprova la foto</div>
+                <div onClick={() => setOcr({ phase: 'idle', text: '', candidates: [] })} className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 10, textAlign: 'center', cursor: 'pointer', textDecoration: 'underline' }}>riprova la foto</div>
               </div>
             )}
           </div>
