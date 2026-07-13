@@ -1,6 +1,3 @@
-// Versione diagnostica: mostra un pezzo vero della pagina (dove
-// compare "円", il simbolo dello yen) invece di indovinare lo schema
-// una terza volta. Da qui costruisco la lettura vera, corretta.
 export default async function handler(req, res) {
   const searchTerm = req.query.q;
   if (!searchTerm) return res.status(400).json({ error: "manca q" });
@@ -11,11 +8,14 @@ export default async function handler(req, res) {
     );
     if (!resp.ok) return res.status(502).json({ error: `Netoff ha risposto ${resp.status}` });
     const html = await resp.text();
-    const idx = html.indexOf("円");
+    // cerco il NOME della carta stesso, non un simbolo generico che
+    // può comparire ovunque nella pagina (script, meta tag, ecc.)
+    const idx = html.toLowerCase().indexOf(searchTerm.toLowerCase());
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({
       html_length: html.length,
-      sample_around_price: idx > -1 ? html.slice(Math.max(0, idx - 400), idx + 100) : "nessun simbolo yen trovato nella pagina",
+      found_search_term: idx > -1,
+      sample_around_term: idx > -1 ? html.slice(Math.max(0, idx - 200), idx + 500) : "termine di ricerca non trovato nella pagina",
       fetchedAt: new Date().toISOString(),
     });
   } catch (e) {

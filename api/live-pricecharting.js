@@ -8,11 +8,12 @@ export default async function handler(req, res) {
     );
     if (!resp.ok) return res.status(502).json({ error: `PriceCharting ha risposto ${resp.status}` });
     const html = await resp.text();
-    const idx = html.search(/\/game\//);
+    const idx = html.toLowerCase().indexOf(searchTerm.toLowerCase());
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({
       html_length: html.length,
-      sample_around_link: idx > -1 ? html.slice(Math.max(0, idx - 200), idx + 400) : "nessun link /game/ trovato",
+      found_search_term: idx > -1,
+      sample_around_term: idx > -1 ? html.slice(Math.max(0, idx - 200), idx + 500) : "termine di ricerca non trovato nella pagina",
       fetchedAt: new Date().toISOString(),
     });
   } catch (e) {
