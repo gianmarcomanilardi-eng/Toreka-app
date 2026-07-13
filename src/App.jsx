@@ -807,10 +807,18 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
 
 function RealCardDetail({ card, onBack, currency, collection = [], toggleCollection }) {
   const [state, setState] = useState({ status: 'loading', prices: [], error: null });
+  const [live, setLive] = useState({ status: 'loading', results: [], fetchedAt: null, error: null });
   useEffect(() => {
     fetchCardPrices(card.tcgdex_id)
       .then((prices) => setState({ status: 'ok', prices, error: null }))
       .catch((error) => setState({ status: 'error', prices: [], error: error.message || String(error) }));
+  }, [card.tcgdex_id]);
+  useEffect(() => {
+    const term = card.name_en || card.name;
+    fetch(`/api/live-price?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => setLive({ status: 'ok', results: data.results || [], fetchedAt: data.fetchedAt, error: null }))
+      .catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
   }, [card.tcgdex_id]);
   const inColl = collection.includes(card.tcgdex_id);
 
@@ -833,8 +841,34 @@ function RealCardDetail({ card, onBack, currency, collection = [], toggleCollect
         <button onClick={() => toggleCollection(card.tcgdex_id)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
           {inColl ? <Check size={15} /> : <Plus size={15} />}<span style={{ fontWeight: 600, fontSize: 13 }}>{inColl ? 'Nella tua collezione' : 'Aggiungi alla collezione'}</span>
         </button>
+        <div style={{ marginTop: 22 }}>
+          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 4, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VALORE DI MERCATO ORA</div>
+          {live.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Cerco il valore attuale...</div>}
+          {live.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{live.error}</div>}
+          {live.status === 'ok' && (
+            <>
+              <div className="tk-body" style={{ color: C.mist, fontSize: 9.5, fontStyle: 'italic', marginBottom: 6 }}>
+                aggiornato ora, non salvato — {live.fetchedAt ? new Date(live.fetchedAt).toLocaleTimeString('it-IT') : ''}
+              </div>
+              {live.results.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessun risultato dal vivo per questo nome.</div>}
+              {live.results.map((r, i) => (
+                <div key={i} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
+                  <div className="tk-body" style={{ color: C.paper, fontSize: 12 }}>{r.name}{r.set ? ` — ${r.set}` : ''}</div>
+                  {r.confirmedSales.length === 0
+                    ? <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 4 }}>nessuna vendita confermata trovata ora</div>
+                    : r.confirmedSales.map((s, j) => (
+                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                          <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5 }}>{s.gradeTier}</span>
+                          <span className="tk-mono" style={{ color: C.gold, fontSize: 13, fontWeight: 700 }}>{fmtFrom(s.price, s.currency, currency)}</span>
+                        </div>
+                      ))}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
         <div style={{ marginTop: 22, marginBottom: 90 }}>
-          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>PREZZI OSSERVATI</div>
+          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>STORICO SALVATO</div>
           {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Carico...</div>}
           {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{state.error}</div>}
           {state.status === 'ok' && state.prices.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessun prezzo registrato per questa carta.</div>}
