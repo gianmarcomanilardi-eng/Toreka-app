@@ -807,10 +807,18 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
 
 function RealCardDetail({ card, onBack, currency, collection = [], toggleCollection }) {
   const [state, setState] = useState({ status: 'loading', prices: [], error: null });
+  const [fanatics, setFanatics] = useState({ status: 'loading', sales: [], error: null });
   useEffect(() => {
     fetchCardPrices(card.tcgdex_id)
       .then((prices) => setState({ status: 'ok', prices, error: null }))
       .catch((error) => setState({ status: 'error', prices: [], error: error.message || String(error) }));
+  }, [card.tcgdex_id]);
+  useEffect(() => {
+    const searchTerm = card.name_en || card.name;
+    fetch(`https://sales-history-api.services.fanaticscollect.com/api/v1/pub/sales?title=${encodeURIComponent(searchTerm)}&marketplaceSource=bo&page=0&size=10`)
+      .then((r) => r.json())
+      .then((data) => setFanatics({ status: 'ok', sales: data?._embedded?.SalesRecords || [], error: null }))
+      .catch((error) => setFanatics({ status: 'error', sales: [], error: error.message || String(error) }));
   }, [card.tcgdex_id]);
   const inColl = collection.includes(card.tcgdex_id);
 
@@ -850,6 +858,29 @@ function RealCardDetail({ card, onBack, currency, collection = [], toggleCollect
                   <div style={{ marginTop: 4 }}>{p.confirmed ? <ConfirmedSeal /> : <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>prezzo di listino</span>}</div>
                 </div>
                 <span className="tk-mono" style={{ color: C.paper, fontSize: 14, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 26, marginBottom: 90 }}>
+          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 4, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VENDITE FANATICS COLLECT</div>
+          <div className="tk-body" style={{ color: C.mist, fontSize: 10, marginBottom: 8, fontStyle: 'italic' }}>test dal vivo — chiesto in questo momento, direttamente dal telefono</div>
+          {fanatics.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Cerco su Fanatics Collect...</div>}
+          {fanatics.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{fanatics.error}</div>}
+          {fanatics.status === 'ok' && fanatics.sales.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna vendita trovata per questo nome.</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {fanatics.sales.map((s) => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="tk-body" style={{ color: C.paper, fontSize: 11.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                    <span className="tk-mono" style={{ color: C.mist, fontSize: 10 }}>{s.gradingService ? `${s.gradingService} ${s.grade}` : 'raw'}</span>
+                    <span className="tk-body" style={{ color: C.mist, fontSize: 10 }}>{s.soldDate ? new Date(s.soldDate).toLocaleDateString('it-IT') : ''}</span>
+                    <ConfirmedSeal />
+                  </div>
+                </div>
+                <span className="tk-mono" style={{ color: C.paper, fontSize: 13, fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{fmtFrom(parseFloat(s.purchasePrice), 'USD', currency)}</span>
               </div>
             ))}
           </div>
