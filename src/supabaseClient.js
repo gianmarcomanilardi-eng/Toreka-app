@@ -77,20 +77,36 @@ export async function fetchCardPrices(tcgdexId) {
 // osservazione per carta non ha senso calcolare una "variazione 30gg"
 // sintetica: mostriamo le più costose osservate di recente, che è un
 // segnale reale con i dati che abbiamo oggi.
+// Tassi solo per METTERE IN ORDINE le carte per valore reale — non per
+// mostrare prezzi all'utente (quello lo fa fmtFrom in App.jsx). Senza
+// questo, una carta da 2.000.000¥ batteva sempre una da $9.000 solo
+// perché lo yen ha numeri più grandi per lo stesso valore reale.
+const RANKING_RATES_TO_USD = { JPY: 1 / 155.2, USD: 1, EUR: 168.4 / 155.2, CNY: 1 / 21.6 };
+
 export async function fetchFeaturedRealCards(limit = 6) {
   if (supabaseConfigError) throw new Error(supabaseConfigError);
-  const { data, error } = await supabase
-    .from('price_observations').select('tcgdex_id, price, currency, observed_at')
-    .order('price', { ascending: false }).limit(50);
-  if (error) throw error;
+  // una query per valuta, non una sola per tutte insieme — così le
+  // carte in yen (numeri grandi per lo stesso valore reale) non
+  // possono escludere le vere migliori di un'altra valuta solo
+  // arrivando prima nell'ordine grezzo.
+  const currencies = Object.keys(RANKING_RATES_TO_USD);
+  const perCurrency = await Promise.all(currencies.map((cur) =>
+    supabase.from('price_observations').select('tcgdex_id, price, currency, observed_at')
+      .eq('currency', cur).order('price', { ascending: false }).limit(50)
+  ));
   const seen = new Set();
-  const topIds = [];
-  for (const row of data) {
-    if (seen.has(row.tcgdex_id)) continue;
-    seen.add(row.tcgdex_id);
-    topIds.push(row.tcgdex_id);
-    if (topIds.length >= limit) break;
+  const withUsdValue = [];
+  for (const result of perCurrency) {
+    if (result.error) throw result.error;
+    for (const row of result.data) {
+      if (seen.has(row.tcgdex_id)) continue;
+      seen.add(row.tcgdex_id);
+      const rate = RANKING_RATES_TO_USD[row.currency] ?? RANKING_RATES_TO_USD.USD;
+      withUsdValue.push({ tcgdex_id: row.tcgdex_id, usdValue: row.price * rate });
+    }
   }
+  withUsdValue.sort((a, b) => b.usdValue - a.usdValue);
+  const topIds = withUsdValue.slice(0, limit).map((r) => r.tcgdex_id);
   if (!topIds.length) return [];
   const { data: cards, error: cardsError } = await supabase.from('cards').select('*').in('tcgdex_id', topIds);
   if (cardsError) throw cardsError;
