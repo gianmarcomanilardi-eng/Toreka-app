@@ -10,12 +10,20 @@ export default async function handler(req, res) {
     const html = await resp.text();
     const bodyStart = html.indexOf("<body");
     const bodyHtml = bodyStart > -1 ? html.slice(bodyStart) : html;
-    const idx = bodyHtml.toLowerCase().indexOf(searchTerm.toLowerCase());
+    const lower = bodyHtml.toLowerCase();
+    const term = searchTerm.toLowerCase();
+
+    let pos = 0, found = null;
+    while ((pos = lower.indexOf(term, pos)) !== -1) {
+      const window = bodyHtml.slice(pos, pos + 400);
+      if (/\$[\d,]+\.\d{2}/.test(window)) { found = pos; break; }
+      pos += term.length;
+    }
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).json({
       html_length: html.length,
-      found_in_body: idx > -1,
-      sample_around_term: idx > -1 ? bodyHtml.slice(Math.max(0, idx - 300), idx + 600) : "termine non trovato nel corpo della pagina",
+      found_near_price: found !== null,
+      sample: found !== null ? bodyHtml.slice(Math.max(0, found - 300), found + 500) : "nessuna occorrenza vicina a un prezzo",
       fetchedAt: new Date().toISOString(),
     });
   } catch (e) {
