@@ -47,14 +47,28 @@ export async function fetchRawCards(sampleSize = 20) {
 // Cerca per davvero nel database — non un filtro su un elenco già
 // scaricato, ma una richiesta vera che gira sul database, l'unico modo
 // che regge con decine di migliaia di carte.
+// Dizionario di partenza inglese -> giapponese per i nomi dei set più
+// noti che non hanno un equivalente inglese salvato nel database (i
+// set esclusivi giapponesi). Non è completo, cresce nel tempo quando
+// ne scopriamo altri — è un punto di partenza, non la fine.
+const JP_SET_NAME_MAP = {
+  'mysterious mountains': '神秘なる山',
+  'split earth': '裂けた大地',
+};
+
 export async function searchRealCards(query, limit = 40) {
   if (supabaseConfigError) throw new Error(supabaseConfigError);
   let q = supabase.from('cards').select('*').order('name_en', { ascending: true, nullsFirst: false }).limit(limit);
   const term = query.trim();
   if (term) {
-    q = supabase.from('cards').select('*')
-      .or(`name.ilike.%${term}%,name_en.ilike.%${term}%,set_name.ilike.%${term}%`)
-      .limit(limit);
+    // se il termine (o una sua parte) corrisponde a un nome inglese
+    // noto, cerco ANCHE il suo equivalente giapponese — così una
+    // ricerca in inglese trova anche le carte salvate solo in giapponese
+    const lower = term.toLowerCase();
+    const jpEquivalent = Object.entries(JP_SET_NAME_MAP).find(([en]) => lower.includes(en))?.[1];
+    const orParts = [`name.ilike.%${term}%`, `name_en.ilike.%${term}%`, `set_name.ilike.%${term}%`];
+    if (jpEquivalent) orParts.push(`name.ilike.%${jpEquivalent}%`, `set_name.ilike.%${jpEquivalent}%`);
+    q = supabase.from('cards').select('*').or(orParts.join(',')).limit(limit);
   }
   const { data, error } = await q;
   if (error) throw error;
