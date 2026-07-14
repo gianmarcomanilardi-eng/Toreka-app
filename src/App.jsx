@@ -805,7 +805,7 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
   );
 }
 
-function RealCardDetail({ card, onBack, currency, collection = [], toggleCollection }) {
+function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], toggleCollection }) {
   const [state, setState] = useState({ status: 'loading', prices: [], error: null });
   const [live, setLive] = useState({ status: 'loading', results: [], fetchedAt: null, error: null });
   useEffect(() => {
@@ -841,6 +841,13 @@ function RealCardDetail({ card, onBack, currency, collection = [], toggleCollect
         <button onClick={() => toggleCollection(card.tcgdex_id)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
           {inColl ? <Check size={15} /> : <Plus size={15} />}<span style={{ fontWeight: 600, fontSize: 13 }}>{inColl ? 'Nella tua collezione' : 'Aggiungi alla collezione'}</span>
         </button>
+        {setCurrency && (
+          <div className="tk-hscroll" style={{ display: 'flex', gap: 6, marginTop: 14, justifyContent: 'center' }}>
+            {Object.keys(SYMBOLS).map((cur) => (
+              <Chip key={cur} active={cur === currency} onClick={() => setCurrency(cur)}>{cur}</Chip>
+            ))}
+          </div>
+        )}
         <div style={{ marginTop: 22 }}>
           <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 4, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VALORE DI MERCATO ORA</div>
           {live.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Cerco il valore attuale...</div>}
@@ -1120,7 +1127,7 @@ export default function TorekaPrototype() {
   const [selectedReal, setSelectedReal] = useState(null);
   const [scannedCode, setScannedCode] = useState(null);
   const [article, setArticle] = useState(null);
-  const [currency, setCurrency] = useState('JPY');
+  const [currency, setCurrency] = useState('USD');
   const [query, setQuery] = useState('');
   const [collection, setCollection] = useState([]);
   const [recentSearches, setRecentSearches] = useState([]);
@@ -1157,7 +1164,7 @@ export default function TorekaPrototype() {
   else if (view === 'browse') screen = <RealBrowseView onOpenCard={openRealCard} onScan={() => setView('scan')} onManualCode={(code) => { setScannedCode(code); setView('scanresult'); }} />;
   else if (view === 'scan') screen = <ScanView onBack={() => setView(navKey)} onDetected={(code) => { setScannedCode(code); setView('scanresult'); }} />;
   else if (view === 'scanresult') screen = <ScanResultView code={scannedCode} onBack={() => setView(navKey)} onScanAgain={() => setView('scan')} />;
-  else if (view === 'realdetail') screen = <RealCardDetail key={selectedReal?.tcgdex_id} card={selectedReal} onBack={() => setView(navKey)} currency={currency} collection={collection} toggleCollection={toggleCollection} />;
+  else if (view === 'realdetail') screen = <RealCardDetail key={selectedReal?.tcgdex_id} card={selectedReal} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'detail') screen = <DetailView key={selected?.id} card={selected} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'article') screen = <ArticleView key={article?.id} item={article} onBack={() => setView(navKey)} />;
   else if (view === 'portfolio') screen = <PortfolioView collection={collection} onRemove={(id) => toggleCollection(id)} onOpenCard={openRealCard} currency={currency} />;
