@@ -47,8 +47,8 @@ const MULT = {
   CGC: { 10: 0.88, 9.5: 0.68, 9: 0.36, 8.5: 0.22, 8: 0.13 },
   TAG: { 10.5: 1.1, 10: 0.95, 9: 0.38, 8.5: 0.23, 8: 0.13 },
 };
-const RATES = { JPY: 1, USD: 1 / 155.2, EUR: 1 / 168.4, CNY: 1 / 21.6 };
-const SYMBOLS = { JPY: '¥', USD: '$', EUR: '€', CNY: 'CN¥' };
+const RATES = { JPY: 1, USD: 1 / 155.2, EUR: 1 / 168.4, CNY: 1 / 21.6, HKD: 1 / 20.0 };
+const SYMBOLS = { JPY: '¥', USD: '$', EUR: '€', CNY: 'CN¥', HKD: 'HK$' };
 function fmt(jpy, currency) { const v = jpy * RATES[currency]; if (currency === 'JPY') return `¥${Math.round(v).toLocaleString('ja-JP')}`; return `${SYMBOLS[currency]}${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`; }
 function fmtConverted(v, currency) { if (currency === 'JPY') return `¥${Math.round(v).toLocaleString('ja-JP')}`; return `${SYMBOLS[currency]}${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`; }
 function fmtFrom(amount, fromCurrency, toCurrency) {

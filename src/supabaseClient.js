@@ -51,9 +51,19 @@ export async function fetchRawCards(sampleSize = 20) {
 // noti che non hanno un equivalente inglese salvato nel database (i
 // set esclusivi giapponesi). Non è completo, cresce nel tempo quando
 // ne scopriamo altri — è un punto di partenza, non la fine.
+// Le voci sotto sono incrociate tra due fonti indipendenti che
+// concordano (Pokellector per il nome inglese, ricerca storica
+// giapponese per il nome originale), non indovinate.
 const JP_SET_NAME_MAP = {
   'mysterious mountains': '神秘なる山',
   'split earth': '裂けた大地',
+  'challenge from the darkness': '闇からの挑戦',
+  "leader's stadium": 'リーダーズスタジアム',
+  'rocket gang': 'ロケット団',
+  'mystery of the fossils': '化石の秘密',
+  'pokemon jungle': 'ポケモンジャングル',
+  'darkness and to light': '闇、そして光へ',
+  'gold, silver, to a new world': '金、銀、新世界へ',
 };
 
 export async function searchRealCards(query, limit = 40) {
