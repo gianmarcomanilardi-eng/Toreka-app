@@ -822,6 +822,16 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
       .catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
   }, [card.tcgdex_id]);
   const inColl = collection.includes(card.tcgdex_id);
+  const confirmedSorted = state.status === 'ok' ? state.prices.filter((p) => p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
+  const listedSorted = state.status === 'ok' ? state.prices.filter((p) => !p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
+  const recentForEstimate = confirmedSorted.slice(0, 5);
+  const estimateJPY = recentForEstimate.length > 0
+    ? recentForEstimate.reduce((sum, p) => sum + p.price / (RATES[p.currency] ?? 1), 0) / recentForEstimate.length
+    : null;
+  const chartData = [...confirmedSorted].filter((p) => p.observed_at).reverse().map((p) => ({
+    date: fmtDate(new Date(p.observed_at)),
+    value: (p.price / (RATES[p.currency] ?? 1)) * RATES[currency],
+  }));
 
   return (
     <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
@@ -849,58 +859,62 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
             ))}
           </div>
         )}
-        <div style={{ marginTop: 22 }}>
-          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 4, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VALORE DI MERCATO ORA</div>
-          {live.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Cerco il valore attuale...</div>}
-          {live.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{live.error}</div>}
-          {live.status === 'ok' && (
-            <>
-              <div className="tk-body" style={{ color: C.mist, fontSize: 9.5, fontStyle: 'italic', marginBottom: 6 }}>
-                aggiornato ora, non salvato — {live.fetchedAt ? new Date(live.fetchedAt).toLocaleTimeString('it-IT') : ''}
-              </div>
-              {live.results.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessun risultato dal vivo per questo nome.</div>}
-              {live.results.slice(0, 1).map((r, i) => (
-                <div key={i} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
-                  <div className="tk-body" style={{ color: C.paper, fontSize: 12 }}>{r.name}{r.set ? ` — ${r.set}` : ''}</div>
-                  {r.confirmedSales.length === 0
-                    ? <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 4 }}>nessuna vendita confermata trovata ora</div>
-                    : r.confirmedSales.map((s, j) => (
-                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                          <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5 }}>{s.gradeTier}</span>
-                          <span className="tk-mono" style={{ color: C.gold, fontSize: 13, fontWeight: 700 }}>{fmtFrom(s.price, s.currency, currency)}</span>
-                        </div>
-                      ))}
-                </div>
-              ))}
-            </>
+
+        <div style={{ marginTop: 20, textAlign: 'center' }}>
+          <div className="tk-mono" style={{ color: C.mist, fontSize: 10, letterSpacing: 1.5 }}>STIMA DI MERCATO</div>
+          {estimateJPY !== null ? (
+            <div className="tk-display" style={{ color: C.gold, fontSize: 32, fontWeight: 700, marginTop: 4 }}>{fmtConverted(estimateJPY * RATES[currency], currency)}</div>
+          ) : (
+            <div className="tk-body" style={{ color: C.mist, fontSize: 13, marginTop: 6 }}>Ancora nessuna vendita confermata per calcolare una stima.</div>
           )}
-        </div>
-        <div style={{ marginTop: 22 }}>
-          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VENDUTI CONFERMATI</div>
-          {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Carico...</div>}
-          {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{state.error}</div>}
-          {state.status === 'ok' && state.prices.filter((p) => p.confirmed).length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna vendita confermata registrata per questa carta.</div>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {state.prices.filter((p) => p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)).map((p) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <PlatformPill name={p.source} />
-                    <span className="tk-mono" style={{ color: C.mist, fontSize: 10 }}>{p.grade_company ? `${p.grade_company} ${p.grade}` : 'raw'}</span>
-                    {p.observed_at && <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{new Date(p.observed_at).toLocaleDateString('it-IT')}</span>}
-                  </div>
-                  <div style={{ marginTop: 4 }}><ConfirmedSeal /></div>
-                </div>
-                <span className="tk-mono" style={{ color: C.paper, fontSize: 14, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
-              </div>
-            ))}
+          <div className="tk-body" style={{ color: C.mist, fontSize: 10, marginTop: 2 }}>
+            {live.status === 'ok' && live.fetchedAt ? `controllato dal vivo alle ${new Date(live.fetchedAt).toLocaleTimeString('it-IT')}` : (live.status === 'loading' ? 'controllo il valore dal vivo...' : '')}
           </div>
         </div>
+
+        <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1, marginBottom: 6, borderBottom: `1px solid ${C.line}`, paddingBottom: 5 }}>VENDUTI</div>
+            {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 11 }}>Carico...</div>}
+            {state.status === 'ok' && confirmedSorted.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>Nessuna ancora.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {confirmedSorted.slice(0, 6).map((p) => (
+                <div key={p.id} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 8, padding: '7px 8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span className="tk-mono" style={{ color: C.paper, fontSize: 11.5, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+                    <span className="tk-mono" style={{ color: C.mist, fontSize: 9 }}>{p.grade_company ? `${p.grade_company} ${p.grade}` : 'raw'}</span>
+                    {p.observed_at && <span className="tk-body" style={{ color: C.mist, fontSize: 9 }}>{fmtDate(new Date(p.observed_at))}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1, marginBottom: 6, borderBottom: `1px solid ${C.line}`, paddingBottom: 5 }}>ANDAMENTO</div>
+            {chartData.length < 2 ? (
+              <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 8 }}>Servono almeno 2 vendite datate per un grafico.</div>
+            ) : (
+              <div style={{ width: '100%', height: 150 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                    <XAxis dataKey="date" tick={{ fill: C.mist, fontSize: 8 }} axisLine={{ stroke: C.line }} tickLine={false} />
+                    <YAxis hide domain={['dataMin', 'dataMax']} />
+                    <Tooltip contentStyle={{ background: C.ink2, border: `1px solid ${C.line}`, fontSize: 11 }} labelStyle={{ color: C.mist }} formatter={(v) => fmtConverted(v, currency)} />
+                    <Line type="monotone" dataKey="value" stroke={C.gold} strokeWidth={2} dot={{ r: 2, fill: C.gold }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div style={{ marginTop: 22, marginBottom: 90 }}>
           <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>IN VENDITA ORA</div>
-          {state.status === 'ok' && state.prices.filter((p) => !p.confirmed).length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna inserzione attiva registrata per questa carta.</div>}
+          {state.status === 'ok' && listedSorted.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna inserzione attiva registrata per questa carta.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {state.prices.filter((p) => !p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)).map((p) => (
+            {listedSorted.map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
