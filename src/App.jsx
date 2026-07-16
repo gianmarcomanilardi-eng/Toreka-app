@@ -808,6 +808,7 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
 function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], toggleCollection }) {
   const [state, setState] = useState({ status: 'loading', prices: [], error: null });
   const [live, setLive] = useState({ status: 'loading', results: [], fetchedAt: null, error: null });
+  const [gradeFilter, setGradeFilter] = useState('all'); // 'all' | 'graded' | 'raw'
   useEffect(() => {
     fetchCardPrices(card.tcgdex_id)
       .then((prices) => setState({ status: 'ok', prices, error: null }))
@@ -822,8 +823,9 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
       .catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
   }, [card.tcgdex_id]);
   const inColl = collection.includes(card.tcgdex_id);
-  const confirmedSorted = state.status === 'ok' ? state.prices.filter((p) => p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
-  const listedSorted = state.status === 'ok' ? state.prices.filter((p) => !p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
+  const matchesGradeFilter = (p) => gradeFilter === 'all' || (gradeFilter === 'graded' ? !!p.grade_company : !p.grade_company);
+  const confirmedSorted = state.status === 'ok' ? state.prices.filter((p) => p.confirmed && matchesGradeFilter(p)).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
+  const listedSorted = state.status === 'ok' ? state.prices.filter((p) => !p.confirmed && matchesGradeFilter(p)).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
   const recentForEstimate = confirmedSorted.slice(0, 5);
   const estimateJPY = recentForEstimate.length > 0
     ? recentForEstimate.reduce((sum, p) => sum + p.price / (RATES[p.currency] ?? 1), 0) / recentForEstimate.length
@@ -859,6 +861,11 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
             ))}
           </div>
         )}
+        <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'center' }}>
+          <Chip active={gradeFilter === 'all'} onClick={() => setGradeFilter('all')}>Tutte</Chip>
+          <Chip active={gradeFilter === 'graded'} onClick={() => setGradeFilter('graded')}>Gradate</Chip>
+          <Chip active={gradeFilter === 'raw'} onClick={() => setGradeFilter('raw')}>Raw</Chip>
+        </div>
 
         <div style={{ marginTop: 20, textAlign: 'center' }}>
           <div className="tk-mono" style={{ color: C.mist, fontSize: 10, letterSpacing: 1.5 }}>STIMA DI MERCATO</div>
