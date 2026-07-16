@@ -71,17 +71,34 @@ export async function searchRealCards(query, limit = 40) {
   let q = supabase.from('cards').select('*').order('name_en', { ascending: true, nullsFirst: false }).limit(limit);
   const term = query.trim();
   if (term) {
-    // se il termine (o una sua parte) corrisponde a un nome inglese
-    // noto, cerco ANCHE il suo equivalente giapponese — così una
-    // ricerca in inglese trova anche le carte salvate solo in giapponese
-    const lower = term.toLowerCase();
-    const jpEquivalent = Object.entries(JP_SET_NAME_MAP).find(([en]) => lower.includes(en))?.[1];
-    const orParts = [`name.ilike.%${term}%`, `name_en.ilike.%${term}%`, `set_name.ilike.%${term}%`];
-    if (jpEquivalent) orParts.push(`name.ilike.%${jpEquivalent}%`, `set_name.ilike.%${jpEquivalent}%`);
-    q = supabase.from('cards').select('*').or(orParts.join(',')).limit(limit);
+    // ogni parola della ricerca deve trovarsi da qualche parte (nome O
+    // nome inglese O nome set) — non più l'intera frase in un campo
+    // solo, che non trovava mai nulla per ricerche tipo "charizard base set"
+    // (dove "charizard" sta nel nome e "base set" sta nel set, campi diversi)
+    const words = term.split(/\s+/).filter(Boolean);
+    q = supabase.from('cards').select('*').limit(limit);
+    for (const word of words) {
+      q = q.or(`name.ilike.%${word}%,name_en.ilike.%${word}%,set_name.ilike.%${word}%`);
+    }
   }
   const { data, error } = await q;
   if (error) throw error;
+
+  // se la ricerca (o una sua parte) corrisponde a un nome inglese noto
+  // di un set esclusivo giapponese, cerco ANCHE con l'equivalente
+  // giapponese e unisco i risultati, senza duplicati
+  if (term) {
+    const lower = term.toLowerCase();
+    const jpEquivalent = Object.entries(JP_SET_NAME_MAP).find(([en]) => lower.includes(en))?.[1];
+    if (jpEquivalent) {
+      const { data: jpData } = await supabase.from('cards').select('*')
+        .or(`name.ilike.%${jpEquivalent}%,set_name.ilike.%${jpEquivalent}%`).limit(limit);
+      const seen = new Set((data || []).map((c) => c.tcgdex_id));
+      for (const c of jpData || []) {
+        if (!seen.has(c.tcgdex_id)) { data.push(c); seen.add(c.tcgdex_id); }
+      }
+    }
+  }
   return data;
 }
 
