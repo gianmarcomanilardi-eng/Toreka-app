@@ -112,16 +112,53 @@ export async function searchRealCards(query, limit = 40) {
       }
     }
   }
-  return data;
+
+  // una sola riga per carta fisica, non una per ogni fonte che la
+  // copre — preferisco quella con un'immagine, se ce n'è una
+  const groups = new Map();
+  for (const c of data) {
+    const key = `${normalizeForMatch(c.name_en || c.name)}|${normalizeForMatch(c.set_name)}`;
+    const existing = groups.get(key);
+    if (!existing || (!existing.image_url && c.image_url)) groups.set(key, c);
+  }
+  return Array.from(groups.values());
 }
 
-// Tutti i prezzi osservati per una carta — la "storia" reale, non un
-// grafico sintetico: quello che c'è è quello che abbiamo davvero letto.
+// riduce un nome/set al minimo per confrontarli tra fonti diverse
+// (minuscolo, senza punteggiatura, spazi ripetuti compressi)
+function normalizeForMatch(s) {
+  return (s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+// Tutti i prezzi osservati per una carta — raccolti da OGNI riga che
+// rappresenta la stessa carta fisica (stesso nome, stesso set), non
+// solo dalla singola riga della fonte su cui l'utente ha cliccato.
+// Prima ogni fonte (Netoff, Pokellector, PriceCharting, Fanatics...)
+// restava separata con il suo pezzo isolato di storia — questo le unisce.
 export async function fetchCardPrices(tcgdexId) {
   if (supabaseConfigError) throw new Error(supabaseConfigError);
+  const { data: thisCard, error: cardError } = await supabase.from('cards').select('name, name_en, set_name').eq('tcgdex_id', tcgdexId).single();
+  if (cardError) throw cardError;
+
+  const targetName = normalizeForMatch(thisCard.name_en || thisCard.name);
+  const targetSet = normalizeForMatch(thisCard.set_name);
+
+  // prendo un campione ampio di carte con nome simile (per parola
+  // chiave), poi filtro con precisione lato client sul nome+set
+  // normalizzati — evita di dover indicizzare una funzione SQL apposta
+  const keyword = targetName.split(' ').filter(Boolean)[0] || targetName;
+  const { data: candidates, error: candError } = await supabase.from('cards').select('tcgdex_id, name, name_en, set_name')
+    .or(`name.ilike.%${keyword}%,name_en.ilike.%${keyword}%`).limit(500);
+  if (candError) throw candError;
+
+  const matchingIds = (candidates || [])
+    .filter((c) => normalizeForMatch(c.name_en || c.name) === targetName && normalizeForMatch(c.set_name) === targetSet)
+    .map((c) => c.tcgdex_id);
+  if (!matchingIds.includes(tcgdexId)) matchingIds.push(tcgdexId);
+
   const { data, error } = await supabase
     .from('price_observations').select('*')
-    .eq('tcgdex_id', tcgdexId)
+    .in('tcgdex_id', matchingIds)
     .order('observed_at', { ascending: false });
   if (error) throw error;
   return data;
