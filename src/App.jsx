@@ -155,6 +155,23 @@ function GradeSlab({ co, label, size = 'sm' }) {
 }
 function PlatformPill({ name }) { return <span className="tk-body" style={{ fontSize: 10.5, color: C.mist, border: `1px solid ${C.line}`, borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>{name}</span>; }
 function ConfirmedSeal() { return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: C.gold, fontSize: 10.5 }}><CheckCircle2 size={12} strokeWidth={2.5} /><span className="tk-body" style={{ fontWeight: 600 }}>confermato</span></span>; }
+// legge "1st Edition" / "Shadowless" dal nome della carta quando presente
+// (es. "Charizard [1st Edition] #4") — se non c'è nessuna delle due
+// diciture ma la carta è di un'era dove la distinzione esiste (WOTC),
+// si intende Unlimited di default.
+function detectEdition(name) {
+  if (!name) return null;
+  const lower = name.toLowerCase();
+  if (lower.includes('1st edition') || lower.includes('first edition')) return '1st Edition';
+  if (lower.includes('shadowless')) return 'Shadowless';
+  if (lower.includes('unlimited')) return 'Unlimited';
+  return null;
+}
+function EditionPill({ name }) {
+  const edition = detectEdition(name);
+  if (!edition) return null;
+  return <span className="tk-mono" style={{ fontSize: 9.5, color: C.teal, border: `1px solid ${C.teal}55`, borderRadius: 20, padding: '2px 7px', whiteSpace: 'nowrap' }}>{edition}</span>;
+}
 function CardArt({ hue = 0, label, round = false, imageUrl = null }) {
   const [imgFailed, setImgFailed] = useState(false);
   const showImage = imageUrl && !imgFailed;
@@ -847,6 +864,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
         <div style={{ textAlign: 'center', marginTop: 14 }}>
           <div className="tk-display" style={{ color: C.paper, fontSize: 19, fontWeight: 700 }}>{card.name_en || card.name}</div>
           {card.name_en && card.name !== card.name_en && <div className="tk-body" style={{ color: C.mist, fontSize: 12, marginTop: 2 }}>{card.name}</div>}
+          {detectEdition(card.name_en || card.name) && <div style={{ marginTop: 6 }}><EditionPill name={card.name_en || card.name} /></div>}
           {card.tcgdex_id.startsWith('yuyu-') && (
             <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 8, fontStyle: 'italic' }}>Non ancora abbinata a un catalogo — nome originale dalla fonte.</div>
           )}

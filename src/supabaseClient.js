@@ -68,21 +68,34 @@ const JP_SET_NAME_MAP = {
 
 export async function searchRealCards(query, limit = 40) {
   if (supabaseConfigError) throw new Error(supabaseConfigError);
-  let q = supabase.from('cards').select('*').order('name_en', { ascending: true, nullsFirst: false }).limit(limit);
   const term = query.trim();
+  let data = [];
+
   if (term) {
-    // ogni parola della ricerca deve trovarsi da qualche parte (nome O
-    // nome inglese O nome set) — non più l'intera frase in un campo
-    // solo, che non trovava mai nulla per ricerche tipo "charizard base set"
-    // (dove "charizard" sta nel nome e "base set" sta nel set, campi diversi)
-    const words = term.split(/\s+/).filter(Boolean);
-    q = supabase.from('cards').select('*').limit(limit);
-    for (const word of words) {
-      q = q.or(`name.ilike.%${word}%,name_en.ilike.%${word}%,set_name.ilike.%${word}%`);
+    // provo prima la ricerca per somiglianza (tollerante a refusi e nomi
+    // incompleti) — richiede la funzione SQL creata una volta sola su
+    // Supabase; se non esiste ancora, passo al metodo precedente
+    const fuzzy = await supabase.rpc('search_cards_fuzzy', { search_term: term, result_limit: limit });
+    if (!fuzzy.error && fuzzy.data) {
+      data = fuzzy.data;
+    } else {
+      // di riserva: ogni parola della ricerca deve trovarsi da qualche
+      // parte (nome O nome inglese O nome set), non l'intera frase in
+      // un campo solo
+      const words = term.split(/\s+/).filter(Boolean);
+      let q = supabase.from('cards').select('*').limit(limit);
+      for (const word of words) {
+        q = q.or(`name.ilike.%${word}%,name_en.ilike.%${word}%,set_name.ilike.%${word}%`);
+      }
+      const fallback = await q;
+      if (fallback.error) throw fallback.error;
+      data = fallback.data || [];
     }
+  } else {
+    const { data: allData, error } = await supabase.from('cards').select('*').order('name_en', { ascending: true, nullsFirst: false }).limit(limit);
+    if (error) throw error;
+    data = allData || [];
   }
-  const { data, error } = await q;
-  if (error) throw error;
 
   // se la ricerca (o una sua parte) corrisponde a un nome inglese noto
   // di un set esclusivo giapponese, cerco ANCHE con l'equivalente
