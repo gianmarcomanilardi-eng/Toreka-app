@@ -814,7 +814,8 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
       .catch((error) => setState({ status: 'error', prices: [], error: error.message || String(error) }));
   }, [card.tcgdex_id]);
   useEffect(() => {
-    const term = card.name_en || card.name;
+    const baseName = card.name_en || card.name;
+    const term = card.set_name ? `${baseName} ${card.set_name}` : baseName;
     fetch(`/api/live-price?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => setLive({ status: 'ok', results: data.results || [], fetchedAt: data.fetchedAt, error: null }))
@@ -858,7 +859,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
                 aggiornato ora, non salvato — {live.fetchedAt ? new Date(live.fetchedAt).toLocaleTimeString('it-IT') : ''}
               </div>
               {live.results.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessun risultato dal vivo per questo nome.</div>}
-              {live.results.map((r, i) => (
+              {live.results.slice(0, 1).map((r, i) => (
                 <div key={i} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
                   <div className="tk-body" style={{ color: C.paper, fontSize: 12 }}>{r.name}{r.set ? ` — ${r.set}` : ''}</div>
                   {r.confirmedSales.length === 0
