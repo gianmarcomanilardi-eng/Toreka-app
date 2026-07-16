@@ -874,21 +874,40 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
             </>
           )}
         </div>
-        <div style={{ marginTop: 22, marginBottom: 90 }}>
-          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>STORICO SALVATO</div>
+        <div style={{ marginTop: 22 }}>
+          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VENDUTI CONFERMATI</div>
           {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Carico...</div>}
           {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{state.error}</div>}
-          {state.status === 'ok' && state.prices.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessun prezzo registrato per questa carta.</div>}
+          {state.status === 'ok' && state.prices.filter((p) => p.confirmed).length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna vendita confermata registrata per questa carta.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {state.prices.map((p) => (
+            {state.prices.filter((p) => p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)).map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <PlatformPill name={p.source} />
                     <span className="tk-mono" style={{ color: C.mist, fontSize: 10 }}>{p.grade_company ? `${p.grade_company} ${p.grade}` : 'raw'}</span>
-                    <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{new Date(p.observed_at).toLocaleDateString('it-IT')}</span>
+                    {p.observed_at && <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{new Date(p.observed_at).toLocaleDateString('it-IT')}</span>}
                   </div>
-                  <div style={{ marginTop: 4 }}>{p.confirmed ? <ConfirmedSeal /> : <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>prezzo di listino</span>}</div>
+                  <div style={{ marginTop: 4 }}><ConfirmedSeal /></div>
+                </div>
+                <span className="tk-mono" style={{ color: C.paper, fontSize: 14, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginTop: 22, marginBottom: 90 }}>
+          <div className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>IN VENDITA ORA</div>
+          {state.status === 'ok' && state.prices.filter((p) => !p.confirmed).length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna inserzione attiva registrata per questa carta.</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {state.prices.filter((p) => !p.confirmed).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)).map((p) => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <PlatformPill name={p.source} />
+                    <span className="tk-mono" style={{ color: C.mist, fontSize: 10 }}>{p.grade_company ? `${p.grade_company} ${p.grade}` : 'raw'}</span>
+                    {p.observed_at && <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{new Date(p.observed_at).toLocaleDateString('it-IT')}</span>}
+                  </div>
+                  <div style={{ marginTop: 4 }}><span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>prezzo di listino</span></div>
                 </div>
                 <span className="tk-mono" style={{ color: C.paper, fontSize: 14, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
               </div>
