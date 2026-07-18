@@ -1208,24 +1208,17 @@ function TextScanMode({ onDetected, certInfo }) {
   }
 
   async function readWithGemini(base64Image) {
-    const key = 'AQ.Ab8RN6KFBAn5mYJwnFONdLN0QArkZJRRoUFRnhcIkpNHvfbUcw'; // chiave Gemini
-    if (!key) return null;
     try {
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+      const resp = await fetch('/api/gemini-vision', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
-              { text: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.' },
-            ],
-          }],
+          image: base64Image,
+          prompt: 'Su questa slab di gradazione, leggi SOLO il numero di certificato/seriale (può essere in verticale, può contenere lettere). Rispondi con SOLO quel codice, niente altro testo, nessuna spiegazione.',
         }),
       });
-      if (!resp.ok) return null; // errore vero (es. chiave sbagliata): passa al motore dopo, non fermarti qui
-      const json = await resp.json();
-      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!resp.ok) return null; // errore vero: passa al motore dopo, non fermarti qui
+      const { text } = await resp.json();
       return typeof text === 'string' ? text : null;
     } catch (e) { return null; }
   }
@@ -1445,22 +1438,16 @@ function RawCardScanMode({ onFound }) {
   }, []);
 
   async function readCardWithGemini(base64Image) {
-    const key = 'AQ.Ab8RN6KFBAn5mYJwnFONdLN0QArkZJRRoUFRnhcIkpNHvfbUcw';
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+    const resp = await fetch('/api/gemini-vision', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          parts: [
-            { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
-            { text: 'Questa è una carta Pokémon (non una slab gradata). Leggi il nome della carta stampato in alto, e se visibile il nome del set/espansione. Rispondi SOLO con "Nome Carta - Nome Set" (usa il set solo se lo leggi con certezza, altrimenti solo il nome carta), niente altro testo.' },
-          ],
-        }],
+        image: base64Image,
+        prompt: 'Questa è una carta Pokémon (non una slab gradata). Leggi il nome della carta stampato in alto, e se visibile il nome del set/espansione. Rispondi SOLO con "Nome Carta - Nome Set" (usa il set solo se lo leggi con certezza, altrimenti solo il nome carta), niente altro testo.',
       }),
     });
     if (!resp.ok) throw new Error(`Gemini ha risposto ${resp.status}`);
-    const json = await resp.json();
-    const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const { text } = await resp.json();
     if (typeof text !== 'string' || !text.trim()) throw new Error('Nessun testo letto dalla carta');
     return text.trim();
   }
