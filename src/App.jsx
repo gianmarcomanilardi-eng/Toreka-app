@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, ChevronLeft, Home, User, Wallet, TrendingUp, TrendingDown,
-  CheckCircle2, ScanLine, Youtube, Quote, ArrowRight, Sparkles, Plus, Check, Clock, Globe2
+  CheckCircle2, ScanLine, Youtube, Quote, ArrowRight, Sparkles, Plus, Check, Clock, Globe2, X, Star
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { BrowserMultiFormatReader } from '@zxing/browser';
@@ -1494,8 +1494,8 @@ function RealCardRow({ card, onOpen }) {
   );
 }
 
-function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
-  const [query, setQuery] = useState('');
+function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedSearches = [], onToggleSaved }) {
+  const [query, setQuery] = useState(initialQuery || '');
   const [state, setState] = useState({ status: 'loading', cards: [], error: null });
   const [manualOpen, setManualOpen] = useState(false);
   const [manualValue, setManualValue] = useState('');
@@ -1510,6 +1510,8 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
     return () => clearTimeout(timer);
   }, [query]);
 
+  const isSaved = query.trim() && savedSearches.some((s) => s.term.toLowerCase() === query.trim().toLowerCase());
+
   return (
     <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
       <GridTexture />
@@ -1521,6 +1523,11 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode }) {
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca tra le carte vere..." className="tk-body"
               style={{ background: 'transparent', border: 'none', outline: 'none', color: C.paper, fontSize: 13.5, width: '100%' }} />
           </div>
+          {query.trim() && onToggleSaved && (
+            <button onClick={() => onToggleSaved(query)} style={{ width: 38, height: 38, borderRadius: 10, background: isSaved ? C.gold : C.ink2, border: `1px solid ${isSaved ? C.gold : C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Salva questa ricerca">
+              <Star size={16} color={isSaved ? C.ink : C.mist} fill={isSaved ? C.ink : 'none'} />
+            </button>
+          )}
           <button onClick={onScan} style={{ width: 38, height: 38, borderRadius: 10, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona una carta gradata"><ScanLine size={17} color={C.paper} /></button>
         </div>
         {!manualOpen ? (
@@ -1570,18 +1577,19 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
     fetch(`/api/live-price?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
-        const hasResults = (data.results || []).some((r) => r.confirmedSales.length > 0);
-        if (hasResults || baseName === term) {
-          setLive({ status: 'ok', results: data.results || [], fetchedAt: data.fetchedAt, error: null });
-        } else {
-          // il nome del set scritto come nel nostro catalogo potrebbe
-          // non corrispondere a come eBay descrive la carta — riprovo
-          // con solo il nome base, più probabile che trovi qualcosa
-          fetch(`/api/live-price?q=${encodeURIComponent(baseName)}`, { cache: 'no-store' })
-            .then((r) => r.json())
-            .then((data2) => setLive({ status: 'ok', results: data2.results || [], fetchedAt: data2.fetchedAt, error: null }))
-            .catch(() => setLive({ status: 'ok', results: data.results || [], fetchedAt: data.fetchedAt, error: null }));
-        }
+        // controllo di sicurezza: se sappiamo il set di questa carta e
+        // PokeTrace risponde con un set chiaramente diverso, non è la
+        // stessa carta — meglio non mostrare nulla che mostrare una
+        // carta sbagliata spacciata per quella giusta (è successo con
+        // "Charizard Gold Star" che tornava con dati del Base Set)
+        const setLooksRelated = (r) => {
+          if (!card.set_name || !r.set) return true;
+          const a = card.set_name.toLowerCase();
+          const b = r.set.toLowerCase();
+          return a.includes(b) || b.includes(a);
+        };
+        const filteredResults = (data.results || []).filter(setLooksRelated);
+        setLive({ status: 'ok', results: filteredResults, fetchedAt: data.fetchedAt, error: null });
       })
       .catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
   }, [card.tcgdex_id]);
@@ -1744,45 +1752,33 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
   );
 }
 
-function DbTestView() {
-  const [state, setState] = useState({ status: 'loading', cards: [], prices: [], cardsCount: 0, pricesCount: 0, error: null });
-  useEffect(() => {
-    fetchRawCards()
-      .then(({ cards, prices, cardsCount, pricesCount }) => setState({ status: 'ok', cards, prices, cardsCount, pricesCount, error: null }))
-      .catch((error) => setState({ status: 'error', cards: [], prices: [], cardsCount: 0, pricesCount: 0, error: error.message || String(error) }));
-  }, []);
-
+function SavedSearchesView({ savedSearches, onRemove, onRunSearch }) {
   return (
     <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
       <GridTexture />
       <div style={{ position: 'relative', padding: '18px 16px 90px' }}>
-        <TopBar title="Test database" subtitle="dati reali, non ancora vestiti" />
-        {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 13, marginTop: 30, textAlign: 'center' }}>Sto leggendo dal database...</div>}
-        {state.status === 'error' && (
-          <div className="tk-body" style={{ color: C.vermillion, fontSize: 12.5, marginTop: 30, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 14, lineHeight: 1.5 }}>
-            Qualcosa non ha funzionato: <br /><span className="tk-mono" style={{ fontSize: 11 }}>{state.error}</span>
+        <TopBar title="Ricerche salvate" subtitle="le tue ricerche preferite, sempre a portata" />
+        {savedSearches.length === 0 && (
+          <div className="tk-body" style={{ color: C.mist, fontSize: 13, marginTop: 30, textAlign: 'center', lineHeight: 1.6 }}>
+            Nessuna ricerca salvata ancora.<br />
+            Cerca una carta, poi tocca l'icona a forma di stella accanto alla ricerca per salvarla qui.
           </div>
         )}
-        {state.status === 'ok' && (
-          <div style={{ marginTop: 16 }}>
-            <div className="tk-body" style={{ color: C.jade, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Collegato! {state.cardsCount.toLocaleString('it-IT')} carte totali, {state.pricesCount.toLocaleString('it-IT')} prezzi totali nel database.
-            </div>
-            <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 12 }}>
-              Qui sotto solo un campione di {state.cards.length} — mostrarle tutte in un elenco non sarebbe comunque leggibile.
-            </div>
-            {state.cardsCount === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Il database risponde ma è vuoto — manca ancora l'INSERT di prova (o i dati veri).</div>}
-            {state.cards.map((c) => (
-              <div key={c.tcgdex_id} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
-                <div className="tk-body" style={{ color: C.paper, fontWeight: 600, fontSize: 13 }}>{c.name} {c.name_en && `(${c.name_en})`}</div>
-                <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 2 }}>{c.set_name} · {c.rarity} · {c.lang}</div>
-                {state.prices.filter((p) => p.tcgdex_id === c.tcgdex_id).map((p) => (
-                  <div key={p.id} className="tk-mono" style={{ color: C.gold, fontSize: 12, marginTop: 6 }}>
-                    {p.source} · {p.grade_company ?? 'raw'} {p.grade ?? ''} · {p.price} {p.currency}
-                  </div>
-                ))}
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {savedSearches.map((s) => (
+            <div key={s.term} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
+              <div onClick={() => onRunSearch(s.term)} style={{ flex: 1, cursor: 'pointer', minWidth: 0 }}>
+                <div className="tk-body" style={{ color: C.paper, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.term}</div>
+                <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 2 }}>salvata il {new Date(s.savedAt).toLocaleDateString('it-IT')}</div>
               </div>
-            ))}
+              <button onClick={() => onRunSearch(s.term)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 6 }}><Search size={17} color={C.mist} /></button>
+              <button onClick={() => onRemove(s.term)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 6 }}><X size={17} color={C.vermillion} /></button>
+            </div>
+          ))}
+        </div>
+        {savedSearches.length > 0 && (
+          <div className="tk-body" style={{ color: C.mist, fontSize: 10, marginTop: 18, textAlign: 'center', fontStyle: 'italic', lineHeight: 1.5 }}>
+            Per ora rieseguono la ricerca quando le tocchi — l'avviso automatico su nuove inserzioni è il prossimo pezzo da costruire.
           </div>
         )}
       </div>
@@ -1948,7 +1944,7 @@ function DetailView({ card, onBack, currency, setCurrency, collection, toggleCol
 }
 
 function BottomNav({ view, onNav }) {
-  const items = [{ k: 'home', icon: Home, label: 'Home' }, { k: 'browse', icon: Search, label: 'Cerca' }, { k: 'portfolio', icon: Wallet, label: 'Portfolio' }, { k: 'profile', icon: User, label: 'Test DB' }];
+  const items = [{ k: 'home', icon: Home, label: 'Home' }, { k: 'browse', icon: Search, label: 'Cerca' }, { k: 'portfolio', icon: Wallet, label: 'Portfolio' }, { k: 'saved', icon: Star, label: 'Salvate' }];
   return (
     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: C.ink, borderTop: `1px solid ${C.line}`, display: 'flex', padding: '10px 6px 14px' }}>
       {items.map((it) => { const active = view === it.k; return (
@@ -1975,14 +1971,24 @@ export default function TorekaPrototype() {
   const [query, setQuery] = useState('');
   const [collection, setCollection] = useState([]);
   const [recentSearches, setRecentSearches] = useState([]);
+  const [savedSearches, setSavedSearches] = useState([]);
 
   useEffect(() => {
     try { const saved = localStorage.getItem('toreka_collection'); setCollection(saved ? JSON.parse(saved) : []); } catch (e) { setCollection([]); }
     try { const saved = localStorage.getItem('toreka_recent_searches'); setRecentSearches(saved ? JSON.parse(saved) : []); } catch (e) { setRecentSearches([]); }
+    try { const saved = localStorage.getItem('toreka_saved_searches'); setSavedSearches(saved ? JSON.parse(saved) : []); } catch (e) { setSavedSearches([]); }
   }, []);
 
   function persistCollection(next) { setCollection(next); try { localStorage.setItem('toreka_collection', JSON.stringify(next)); } catch (e) {} }
   function persistRecent(next) { setRecentSearches(next); try { localStorage.setItem('toreka_recent_searches', JSON.stringify(next)); } catch (e) {} }
+  function persistSavedSearches(next) { setSavedSearches(next); try { localStorage.setItem('toreka_saved_searches', JSON.stringify(next)); } catch (e) {} }
+  function toggleSavedSearch(term) {
+    const t = term.trim();
+    if (!t) return;
+    const exists = savedSearches.some((s) => s.term.toLowerCase() === t.toLowerCase());
+    const next = exists ? savedSearches.filter((s) => s.term.toLowerCase() !== t.toLowerCase()) : [{ term: t, savedAt: new Date().toISOString() }, ...savedSearches];
+    persistSavedSearches(next);
+  }
   function toggleCollection(tcgdexId) {
     const exists = collection.includes(tcgdexId);
     const next = exists ? collection.filter((id) => id !== tcgdexId) : [...collection, tcgdexId];
@@ -2005,14 +2011,14 @@ export default function TorekaPrototype() {
 
   let screen;
   if (view === 'home') screen = <HomeView onOpenCard={openCard} onOpenArticle={openArticle} onGoBrowse={() => nav('browse')} onOpenRealCard={openRealCard} />;
-  else if (view === 'browse') screen = <RealBrowseView onOpenCard={openRealCard} onScan={() => setView('scan')} onManualCode={(code) => { setScannedCode(code); setView('scanresult'); }} />;
+  else if (view === 'browse') screen = <RealBrowseView key={navKey === 'browse' ? query : 'browse'} onOpenCard={openRealCard} onScan={() => setView('scan')} onManualCode={(code) => { setScannedCode(code); setView('scanresult'); }} initialQuery={query} savedSearches={savedSearches} onToggleSaved={toggleSavedSearch} />;
   else if (view === 'scan') screen = <ScanView onBack={() => setView(navKey)} onDetected={(code) => { setScannedCode(code); setView('scanresult'); }} />;
   else if (view === 'scanresult') screen = <ScanResultView code={scannedCode} onBack={() => setView(navKey)} onScanAgain={() => setView('scan')} />;
   else if (view === 'realdetail') screen = <RealCardDetail key={selectedReal?.tcgdex_id} card={selectedReal} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'detail') screen = <DetailView key={selected?.id} card={selected} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'article') screen = <ArticleView key={article?.id} item={article} onBack={() => setView(navKey)} />;
   else if (view === 'portfolio') screen = <PortfolioView collection={collection} onRemove={(id) => toggleCollection(id)} onOpenCard={openRealCard} currency={currency} />;
-  else screen = <DbTestView />;
+  else screen = <SavedSearchesView savedSearches={savedSearches} onRemove={toggleSavedSearch} onRunSearch={(term) => { setQuery(term); nav('browse'); }} />;
 
   return (
     <div className="tk-body" style={{ minHeight: '100vh', background: '#0B0A08', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 12px' }}>
