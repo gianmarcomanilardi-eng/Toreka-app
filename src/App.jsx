@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards, fetchCardsByIds, fetchPortfolioHistory } from './supabaseClient.js';
+import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards, fetchCardsByIds, fetchPortfolioHistory, fetchAllSets, fetchCardsBySet } from './supabaseClient.js';
 
 /* ---------------------------------------------------------
    Design tokens
@@ -1499,6 +1499,10 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
   const [state, setState] = useState({ status: 'loading', cards: [], error: null });
   const [manualOpen, setManualOpen] = useState(false);
   const [manualValue, setManualValue] = useState('');
+  const [mode, setMode] = useState('search'); // 'search' | 'browse'
+  const [setsState, setSetsState] = useState({ status: 'idle', sets: [] });
+  const [activeSet, setActiveSet] = useState(null);
+  const [setCardsState, setSetCardsState] = useState({ status: 'idle', cards: [] });
 
   useEffect(() => {
     setState((s) => ({ ...s, status: 'loading' }));
@@ -1509,6 +1513,22 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
+
+  useEffect(() => {
+    if (mode !== 'browse' || setsState.status !== 'idle') return;
+    setSetsState({ status: 'loading', sets: [] });
+    fetchAllSets()
+      .then((sets) => setSetsState({ status: 'ok', sets }))
+      .catch((error) => setSetsState({ status: 'error', sets: [], error: error.message || String(error) }));
+  }, [mode]);
+
+  useEffect(() => {
+    if (!activeSet) return;
+    setSetCardsState({ status: 'loading', cards: [] });
+    fetchCardsBySet(activeSet)
+      .then((cards) => setSetCardsState({ status: 'ok', cards }))
+      .catch((error) => setSetCardsState({ status: 'error', cards: [], error: error.message || String(error) }));
+  }, [activeSet]);
 
   const isSaved = query.trim() && savedSearches.some((s) => s.term.toLowerCase() === query.trim().toLowerCase());
 
@@ -1541,16 +1561,54 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
             <button onClick={() => { if (manualValue.trim()) { onManualCode(manualValue.trim()); setManualValue(''); setManualOpen(false); } }} className="tk-body" style={{ padding: '0 16px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>Vai</button>
           </div>
         )}
+        <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+          <button onClick={() => setMode('search')} className="tk-body" style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: `1px solid ${mode === 'search' ? C.gold : C.line}`, background: mode === 'search' ? `${C.gold}22` : 'transparent', color: mode === 'search' ? C.gold : C.mist, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>Ricerca</button>
+          <button onClick={() => setMode('browse')} className="tk-body" style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: `1px solid ${mode === 'browse' ? C.gold : C.line}`, background: mode === 'browse' ? `${C.gold}22` : 'transparent', color: mode === 'browse' ? C.gold : C.mist, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>Sfoglia per set</button>
+        </div>
       </div>
       <div style={{ position: 'relative', padding: '10px 16px 90px' }}>
-        {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Cerco...</div>}
-        {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{state.error}</div>}
-        {state.status === 'ok' && (
+        {mode === 'search' && (
           <>
-            <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 8 }}>{state.cards.length} risultati {!query && '(ultime aggiunte — scrivi per cercare tra tutte)'}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {state.cards.map((c) => <RealCardRow key={c.tcgdex_id} card={c} onOpen={onOpenCard} />)}
-            </div>
+            {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Cerco...</div>}
+            {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{state.error}</div>}
+            {state.status === 'ok' && (
+              <>
+                <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 8 }}>{state.cards.length} risultati {!query && '(ultime aggiunte — scrivi per cercare tra tutte)'}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {state.cards.map((c) => <RealCardRow key={c.tcgdex_id} card={c} onOpen={onOpenCard} />)}
+                </div>
+              </>
+            )}
+          </>
+        )}
+        {mode === 'browse' && !activeSet && (
+          <>
+            {setsState.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Carico l'elenco dei set...</div>}
+            {setsState.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12 }}>{setsState.error}</div>}
+            {setsState.status === 'ok' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {setsState.sets.map((s) => (
+                  <div key={s.setName} onClick={() => setActiveSet(s.setName)} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+                    <div style={{ width: '100%' }}><CardArt hue={(s.setName.length * 37) % 360} label={s.setName.slice(0, 2)} imageUrl={s.image} /></div>
+                    <div className="tk-body" style={{ color: C.paper, fontSize: 11.5, fontWeight: 600, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.setName}</div>
+                    <div className="tk-body" style={{ color: C.mist, fontSize: 10, marginTop: 1 }}>{s.count} cart{s.count === 1 ? 'a' : 'e'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {mode === 'browse' && activeSet && (
+          <>
+            <button onClick={() => setActiveSet(null)} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 8, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 12 }}>
+              <ChevronLeft size={14} color={C.paper} /><span className="tk-body" style={{ color: C.paper, fontSize: 12 }}>{activeSet}</span>
+            </button>
+            {setCardsState.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Carico le carte del set...</div>}
+            {setCardsState.status === 'ok' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {setCardsState.cards.map((c) => <RealCardRow key={c.tcgdex_id} card={c} onOpen={onOpenCard} />)}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1582,11 +1640,22 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
         // stessa carta — meglio non mostrare nulla che mostrare una
         // carta sbagliata spacciata per quella giusta (è successo con
         // "Charizard Gold Star" che tornava con dati del Base Set)
+        // controllo di sicurezza più preciso: tolgo prima le parole
+        // generiche ("pokemon", "the", ecc.), poi richiedo che quello
+        // che resta combaci quasi per intero — non basta che una
+        // parola sola sia in comune (è successo con "Dragon" contro
+        // "Dragon Frontiers", due set VERI ma diversi, non lo stesso
+        // scritto in modo abbreviato)
+        const GENERIC_WORDS = new Set(["pokemon", "the", "tcg", "card", "cards"]);
+        const stripGeneric = (s) => s.toLowerCase().split(/\s+/).filter((w) => !GENERIC_WORDS.has(w)).join(" ");
         const setLooksRelated = (r) => {
           if (!card.set_name || !r.set) return true;
-          const a = card.set_name.toLowerCase();
-          const b = r.set.toLowerCase();
-          return a.includes(b) || b.includes(a);
+          const a = stripGeneric(card.set_name);
+          const b = stripGeneric(r.set);
+          if (a === b) return true;
+          const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+          if (!shorter) return false;
+          return longer.includes(shorter) && shorter.length >= longer.length * 0.75;
         };
         const filteredResults = (data.results || []).filter(setLooksRelated);
         setLive({ status: 'ok', results: filteredResults, fetchedAt: data.fetchedAt, error: null });

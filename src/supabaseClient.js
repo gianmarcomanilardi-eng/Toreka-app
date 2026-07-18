@@ -247,3 +247,36 @@ export async function fetchPortfolioHistory(tcgdexIds) {
   if (error) throw error;
   return data;
 }
+
+// Elenco di tutti i set/espansioni con quante carte ha ognuno e
+// un'immagine rappresentativa — per sfogliare per set come fa
+// PokeScreener, invece di dover sempre cercare per testo.
+export async function fetchAllSets() {
+  if (supabaseConfigError) throw new Error(supabaseConfigError);
+  const bySet = new Map();
+  let start = 0;
+  while (true) {
+    const { data, error } = await supabase.from('cards').select('set_name, image_url').range(start, start + 999);
+    if (error) throw error;
+    if (!data.length) break;
+    for (const row of data) {
+      const name = (row.set_name || '').trim();
+      if (!name) continue;
+      if (!bySet.has(name)) bySet.set(name, { setName: name, count: 0, image: null });
+      const entry = bySet.get(name);
+      entry.count += 1;
+      if (!entry.image && row.image_url) entry.image = row.image_url;
+    }
+    start += 1000;
+  }
+  return Array.from(bySet.values()).sort((a, b) => b.count - a.count);
+}
+
+// Tutte le carte di un set specifico — quando si tocca un set
+// dall'elenco sopra.
+export async function fetchCardsBySet(setName, limit = 300) {
+  if (supabaseConfigError) throw new Error(supabaseConfigError);
+  const { data, error } = await supabase.from('cards').select('*').eq('set_name', setName).limit(limit);
+  if (error) throw error;
+  return data;
+}
