@@ -843,6 +843,20 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
   const matchesGradeFilter = (p) => gradeFilter === 'all' || (gradeFilter === 'graded' ? !!p.grade_company : !p.grade_company);
   const confirmedSorted = state.status === 'ok' ? state.prices.filter((p) => p.confirmed && matchesGradeFilter(p)).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
   const listedSorted = state.status === 'ok' ? state.prices.filter((p) => !p.confirmed && matchesGradeFilter(p)).sort((a, b) => new Date(b.observed_at || 0) - new Date(a.observed_at || 0)) : [];
+  // stima per OGNI grado separatamente (come ALT) — mescolare una
+  // vendita raw con una PSA 10 in un'unica media darebbe un numero
+  // senza senso, ognuno vale in un mercato diverso
+  const gradeTiers = new Map();
+  for (const p of confirmedSorted) {
+    const key = p.grade_company ? `${p.grade_company} ${p.grade}` : 'Raw';
+    if (!gradeTiers.has(key)) gradeTiers.set(key, []);
+    gradeTiers.get(key).push(p);
+  }
+  const tierEstimates = Array.from(gradeTiers.entries()).map(([tier, sales]) => {
+    const recent = sales.slice(0, 5);
+    const jpy = recent.reduce((sum, p) => sum + p.price / (RATES[p.currency] ?? 1), 0) / recent.length;
+    return { tier, jpy, count: sales.length };
+  }).sort((a, b) => b.jpy - a.jpy);
   const recentForEstimate = confirmedSorted.slice(0, 5);
   const estimateJPY = recentForEstimate.length > 0
     ? recentForEstimate.reduce((sum, p) => sum + p.price / (RATES[p.currency] ?? 1), 0) / recentForEstimate.length
@@ -895,6 +909,16 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
           <div className="tk-body" style={{ color: C.mist, fontSize: 10, marginTop: 2 }}>
             {live.status === 'ok' && live.fetchedAt ? `controllato dal vivo alle ${new Date(live.fetchedAt).toLocaleTimeString('it-IT')}` : (live.status === 'loading' ? 'controllo il valore dal vivo...' : '')}
           </div>
+          {tierEstimates.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 12, overflowX: 'auto', paddingBottom: 4, justifyContent: tierEstimates.length <= 4 ? 'center' : 'flex-start' }}>
+              {tierEstimates.map((t) => (
+                <div key={t.tier} style={{ flexShrink: 0, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '6px 10px', minWidth: 68 }}>
+                  <div className="tk-mono" style={{ color: C.mist, fontSize: 9 }}>{t.tier}</div>
+                  <div className="tk-mono" style={{ color: C.paper, fontSize: 12.5, fontWeight: 700 }}>{fmtConverted(t.jpy * RATES[currency], currency)}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

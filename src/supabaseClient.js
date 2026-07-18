@@ -181,9 +181,10 @@ export async function fetchFeaturedRealCards(limit = 6) {
   // possono escludere le vere migliori di un'altra valuta solo
   // arrivando prima nell'ordine grezzo.
   const currencies = Object.keys(RANKING_RATES_TO_USD);
+  const candidatePoolSize = Math.max(limit * 7, 40); // margine ampio, per poter poi preferire quelle con immagine senza perdere le carte di vero valore
   const perCurrency = await Promise.all(currencies.map((cur) =>
     supabase.from('price_observations').select('tcgdex_id, price, currency, observed_at')
-      .eq('currency', cur).order('price', { ascending: false }).limit(50)
+      .eq('currency', cur).order('price', { ascending: false }).limit(candidatePoolSize)
   ));
   const seen = new Set();
   const withUsdValue = [];
@@ -197,11 +198,24 @@ export async function fetchFeaturedRealCards(limit = 6) {
     }
   }
   withUsdValue.sort((a, b) => b.usdValue - a.usdValue);
-  const topIds = withUsdValue.slice(0, limit).map((r) => r.tcgdex_id);
-  if (!topIds.length) return [];
-  const { data: cards, error: cardsError } = await supabase.from('cards').select('*').in('tcgdex_id', topIds);
+  const candidateIds = withUsdValue.slice(0, candidatePoolSize).map((r) => r.tcgdex_id);
+  if (!candidateIds.length) return [];
+  const { data: candidateCards, error: cardsError } = await supabase.from('cards').select('*').in('tcgdex_id', candidateIds);
   if (cardsError) throw cardsError;
-  return topIds.map((id) => cards.find((c) => c.tcgdex_id === id)).filter(Boolean);
+
+  // tra le carte di alto valore, quelle CON immagine vengono prima —
+  // la Home altrimenti mostra sempre le stesse rare senza foto, che
+  // vincono il confronto per prezzo ma danno l'impressione di un
+  // catalogo incompleto quando in realtà è quasi tutto a posto
+  const valueById = new Map(withUsdValue.map((r) => [r.tcgdex_id, r.usdValue]));
+  const ranked = candidateCards
+    .filter((c) => valueById.has(c.tcgdex_id))
+    .sort((a, b) => {
+      const imgDiff = (b.image_url ? 1 : 0) - (a.image_url ? 1 : 0);
+      if (imgDiff !== 0) return imgDiff;
+      return valueById.get(b.tcgdex_id) - valueById.get(a.tcgdex_id);
+    });
+  return ranked.slice(0, limit);
 }
 
 // Carte vere per il Portfolio, prese a partire dagli id salvati nella
