@@ -1604,6 +1604,8 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
               <ChevronLeft size={14} color={C.paper} /><span className="tk-body" style={{ color: C.paper, fontSize: 12 }}>{activeSet}</span>
             </button>
             {setCardsState.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Carico le carte del set...</div>}
+            {setCardsState.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{setCardsState.error}</div>}
+            {setCardsState.status === 'ok' && setCardsState.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Nessuna carta trovata per questo set.</div>}
             {setCardsState.status === 'ok' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {setCardsState.cards.map((c) => <RealCardRow key={c.tcgdex_id} card={c} onOpen={onOpenCard} />)}
