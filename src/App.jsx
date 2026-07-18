@@ -880,7 +880,20 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
     const term = card.set_name ? `${baseName} ${card.set_name}` : baseName;
     fetch(`/api/live-price?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
       .then((r) => r.json())
-      .then((data) => setLive({ status: 'ok', results: data.results || [], fetchedAt: data.fetchedAt, error: null }))
+      .then((data) => {
+        const hasResults = (data.results || []).some((r) => r.confirmedSales.length > 0);
+        if (hasResults || baseName === term) {
+          setLive({ status: 'ok', results: data.results || [], fetchedAt: data.fetchedAt, error: null });
+        } else {
+          // il nome del set scritto come nel nostro catalogo potrebbe
+          // non corrispondere a come eBay descrive la carta — riprovo
+          // con solo il nome base, più probabile che trovi qualcosa
+          fetch(`/api/live-price?q=${encodeURIComponent(baseName)}`, { cache: 'no-store' })
+            .then((r) => r.json())
+            .then((data2) => setLive({ status: 'ok', results: data2.results || [], fetchedAt: data2.fetchedAt, error: null }))
+            .catch(() => setLive({ status: 'ok', results: data.results || [], fetchedAt: data.fetchedAt, error: null }));
+        }
+      })
       .catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
   }, [card.tcgdex_id]);
   const inColl = collection.includes(card.tcgdex_id);
@@ -964,6 +977,21 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
             </div>
           )}
         </div>
+
+        {live.status === 'ok' && live.results.slice(0, 1).map((r, i) => (
+          r.confirmedSales.length > 0 && (
+            <div key={i} style={{ marginTop: 16, background: C.ink2, border: `1px solid ${C.gold}55`, borderRadius: 10, padding: '10px 12px' }}>
+              <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1 }}>TROVATO DAL VIVO ORA (eBay, non ancora salvato)</div>
+              <div className="tk-body" style={{ color: C.paper, fontSize: 12, marginTop: 4 }}>{r.name}{r.set ? ` — ${r.set}` : ''}</div>
+              {r.confirmedSales.map((s, j) => (
+                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+                  <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5 }}>{s.gradeTier}</span>
+                  <span className="tk-mono" style={{ color: C.gold, fontSize: 13, fontWeight: 700 }}>{fmtFrom(s.price, s.currency, currency)}</span>
+                </div>
+              ))}
+            </div>
+          )
+        ))}
 
         <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
