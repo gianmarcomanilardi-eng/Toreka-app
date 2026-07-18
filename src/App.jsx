@@ -1038,10 +1038,21 @@ const CERT_INFO = {
   TAG: { hasCode: true, digits: [6, 10], hint: 'Il numero seriale verticale (con lettere) è accanto al QR — è quello che leggo qui. Se preferisci il QR, cambia in alto su "Codice a barre".', alphanumeric: true, vertical: true },
 };
 
-function ScanView({ onBack, onDetected }) {
+function ScanView({ onBack, onDetected, onRawCardFound }) {
   const [company, setCompany] = useState(null);
   const [mode, setMode] = useState(null); // barcode | text
   const [hintOpen, setHintOpen] = useState(true);
+
+  if (company === 'RAW') {
+    return (
+      <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '18px 16px', zIndex: 3 }}>
+          <button onClick={() => setCompany(null)} style={{ background: 'rgba(0,0,0,0.55)', border: `1px solid ${C.line}`, borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={17} color={C.paper} /></button>
+        </div>
+        <RawCardScanMode onFound={onRawCardFound} />
+      </div>
+    );
+  }
 
   if (!company) {
     return (
@@ -1062,6 +1073,14 @@ function ScanView({ onBack, onDetected }) {
                 <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5, fontWeight: 400 }}>{CERT_INFO[co].digits[0]}-{CERT_INFO[co].digits[1]} cifre</span>
               </button>
             ))}
+            {onRawCardFound && (
+              <button onClick={() => setCompany('RAW')} className="tk-body" style={{
+                ...PANEL, borderRadius: 12, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600, borderColor: C.teal,
+              }}>
+                Carta raw (senza gradazione)
+                <span className="tk-mono" style={{ color: C.teal, fontSize: 9.5, fontWeight: 600 }}>NUOVO</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1404,6 +1423,102 @@ function TextScanMode({ onDetected, certInfo }) {
     </>
   );
 }
+function RawCardScanMode({ onFound }) {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [status, setStatus] = useState('starting'); // starting | ready | error
+  const [error, setError] = useState('');
+  const [ocr, setOcr] = useState({ phase: 'idle', candidates: [], readText: '' }); // idle | working | done | notfound
+
+  useEffect(() => {
+    let active = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((stream) => {
+        if (!active) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        return videoRef.current.play();
+      })
+      .then(() => { if (active) setStatus('ready'); })
+      .catch((e) => { if (active) { setStatus('error'); setError(e.message || String(e)); } });
+    return () => { active = false; if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop()); };
+  }, []);
+
+  async function readCardWithGemini(base64Image) {
+    const key = 'AQ.Ab8RN6KFBAn5mYJwnFONdLN0QArkZJRRoUFRnhcIkpNHvfbUcw';
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
+            { text: 'Questa è una carta Pokémon (non una slab gradata). Leggi il nome della carta stampato in alto, e se visibile il nome del set/espansione. Rispondi SOLO con "Nome Carta - Nome Set" (usa il set solo se lo leggi con certezza, altrimenti solo il nome carta), niente altro testo.' },
+          ],
+        }],
+      }),
+    });
+    if (!resp.ok) throw new Error(`Gemini ha risposto ${resp.status}`);
+    const json = await resp.json();
+    const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof text !== 'string' || !text.trim()) throw new Error('Nessun testo letto dalla carta');
+    return text.trim();
+  }
+
+  async function capture() {
+    setOcr({ phase: 'working', candidates: [], readText: '' });
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+      const readText = await readCardWithGemini(base64);
+      const searchTerm = readText.split(' - ')[0].trim();
+      const candidates = await searchRealCards(searchTerm, 8);
+      setOcr({ phase: candidates.length ? 'done' : 'notfound', candidates, readText });
+    } catch (e) {
+      setOcr({ phase: 'notfound', candidates: [], readText: e.message || String(e) });
+    }
+  }
+
+  return (
+    <>
+      {status === 'starting' && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span className="tk-body" style={{ color: C.mist, fontSize: 13 }}>Apro la fotocamera...</span></div>}
+      {status === 'error' && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}><span className="tk-body" style={{ color: C.vermillion, fontSize: 12.5, textAlign: 'center' }}>{error}</span></div>}
+      <video ref={videoRef} playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      {ocr.phase === 'idle' && status === 'ready' && (
+        <div style={{ position: 'absolute', bottom: 26, left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <div className="tk-body" style={{ color: C.paper, fontSize: 11.5, background: 'rgba(0,0,0,0.6)', padding: '6px 12px', borderRadius: 8 }}>Inquadra la carta, poi scatta — sperimentale, verifica sempre il risultato</div>
+          <button onClick={capture} style={{ width: 62, height: 62, borderRadius: '50%', background: C.teal, border: `3px solid ${C.paper}`, cursor: 'pointer' }} />
+        </div>
+      )}
+      {ocr.phase === 'working' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span className="tk-body" style={{ color: C.paper, fontSize: 13 }}>Leggo la carta...</span>
+        </div>
+      )}
+      {(ocr.phase === 'done' || ocr.phase === 'notfound') && (
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: C.ink, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, maxHeight: '60%', overflowY: 'auto' }}>
+          <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginBottom: 8 }}>letto: "{ocr.readText}"</div>
+          {ocr.phase === 'notfound' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5 }}>Nessuna corrispondenza trovata nel catalogo — riprova con più luce o più vicino al nome della carta.</div>}
+          {ocr.candidates.map((c) => (
+            <div key={c.tcgdex_id} onClick={() => onFound(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: 10, marginBottom: 8, cursor: 'pointer' }}>
+              <div style={{ width: 36 }}><CardArt hue={(c.tcgdex_id.length * 37) % 360} label={(c.name_en || c.name || '?').slice(0, 2)} imageUrl={c.image_url} /></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name_en || c.name}</div>
+                <div className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{c.set_name}</div>
+              </div>
+            </div>
+          ))}
+          <button onClick={() => setOcr({ phase: 'idle', candidates: [], readText: '' })} className="tk-body" style={{ width: '100%', marginTop: 4, padding: '10px 0', borderRadius: 10, border: `1px solid ${C.line}`, background: 'transparent', color: C.mist, fontSize: 12.5, cursor: 'pointer' }}>Riprova</button>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ScanResultView({ code, onBack, onScanAgain }) {
   const [lookup, setLookup] = useState({ status: 'loading', data: null, error: null });
   useEffect(() => {
@@ -2123,7 +2238,7 @@ export default function TorekaPrototype() {
   let screen;
   if (view === 'home') screen = <HomeView onOpenCard={openCard} onOpenArticle={openArticle} onGoBrowse={() => nav('browse')} onOpenRealCard={openRealCard} />;
   else if (view === 'browse') screen = <RealBrowseView key={navKey === 'browse' ? query : 'browse'} onOpenCard={openRealCard} onScan={() => setView('scan')} onManualCode={(code) => { setScannedCode(code); setView('scanresult'); }} initialQuery={query} savedSearches={savedSearches} onToggleSaved={toggleSavedSearch} />;
-  else if (view === 'scan') screen = <ScanView onBack={() => setView(navKey)} onDetected={(code) => { setScannedCode(code); setView('scanresult'); }} />;
+  else if (view === 'scan') screen = <ScanView onBack={() => setView(navKey)} onDetected={(code) => { setScannedCode(code); setView('scanresult'); }} onRawCardFound={openRealCard} />;
   else if (view === 'scanresult') screen = <ScanResultView code={scannedCode} onBack={() => setView(navKey)} onScanAgain={() => setView('scan')} />;
   else if (view === 'realdetail') screen = <RealCardDetail key={selectedReal?.tcgdex_id} card={selectedReal} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
   else if (view === 'detail') screen = <DetailView key={selected?.id} card={selected} onBack={() => setView(navKey)} currency={currency} setCurrency={setCurrency} collection={collection} toggleCollection={toggleCollection} />;
