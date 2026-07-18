@@ -20,6 +20,10 @@ export default async function handler(req, res) {
 
     const titleMatch = flat.match(/requested certification number is defined as the following:\s*\n+\s*#?\d*\s*\n+\s*([^\n]+)/i);
     const gradeMatch = flat.match(/Item Grade\s*\n+\s*([A-Z][A-Z\-]*\s*\d+(?:\.\d+)?)/);
+    // quante copie esistono con un voto PIÙ ALTO di questo esatto
+    // certificato — dà un'idea immediata di quanto sia raro (0 = il
+    // voto più alto possibile per questa carta)
+    const popHigherMatch = flat.match(/PSA Pop Higher\s*\n+\s*(\d+)/i);
 
     const sales = [];
     const pattern = /\$([\d,]+\.\d{2})\s*\n+\s*(\d{2}\/\d{2}\/\d{2})\s*\n+\s*([A-Za-z][A-Za-z\s]*?)\s*\n+\s*(FixedPrice|Auction|BestOffer)\s*\n+\s*(PSA\s*\d+(?:\.\d+)?)/g;
@@ -39,6 +43,7 @@ export default async function handler(req, res) {
       cert,
       cardName: titleMatch ? titleMatch[1].trim() : null,
       grade: gradeMatch ? gradeMatch[1].trim() : null,
+      popHigher: popHigherMatch ? parseInt(popHigherMatch[1], 10) : null,
       sales: sales.slice(0, 10),
       fetchedAt: new Date().toISOString(),
     });

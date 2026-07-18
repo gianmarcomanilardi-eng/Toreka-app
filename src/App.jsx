@@ -1442,6 +1442,13 @@ function ScanResultView({ code, onBack, onScanAgain }) {
               <div className="tk-mono" style={{ color: C.gold, fontSize: 10, letterSpacing: 1.5, marginBottom: 6 }}>CARTA IDENTIFICATA</div>
               <div className="tk-body" style={{ color: C.paper, fontSize: 14, fontWeight: 600 }}>{lookup.data.cardName}</div>
               {lookup.data.grade && <div className="tk-body" style={{ color: C.mist, fontSize: 12, marginTop: 4 }}>Grado: {lookup.data.grade}</div>}
+              {lookup.data.popHigher !== null && (
+                <div className="tk-body" style={{ color: C.mist, fontSize: 11.5, marginTop: 4 }}>
+                  {lookup.data.popHigher === 0
+                    ? 'Il voto più alto mai assegnato a questa carta — nessuna copia superiore esistente'
+                    : `${lookup.data.popHigher} copi${lookup.data.popHigher === 1 ? 'a' : 'e'} con voto più alto di questa esistono`}
+                </div>
+              )}
             </div>
             <div style={{ marginTop: 18 }}>
               <div className="tk-mono" style={{ color: C.gold, fontSize: 10, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VENDITE COMPARABILI (STESSO GRADO)</div>
