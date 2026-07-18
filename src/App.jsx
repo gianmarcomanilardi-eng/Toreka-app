@@ -727,6 +727,14 @@ function TextScanMode({ onDetected, certInfo }) {
   );
 }
 function ScanResultView({ code, onBack, onScanAgain }) {
+  const [lookup, setLookup] = useState({ status: 'loading', data: null, error: null });
+  useEffect(() => {
+    fetch(`/api/psa-cert?cert=${encodeURIComponent(code)}`)
+      .then((r) => r.json())
+      .then((data) => setLookup({ status: data.error ? 'error' : 'ok', data, error: data.error || null }))
+      .catch((error) => setLookup({ status: 'error', data: null, error: error.message || String(error) }));
+  }, [code]);
+
   return (
     <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
       <GridTexture />
@@ -737,13 +745,49 @@ function ScanResultView({ code, onBack, onScanAgain }) {
           <div className="tk-display" style={{ color: C.paper, fontSize: 18, fontWeight: 700, marginTop: 12 }}>Codice letto</div>
           <div className="tk-mono" style={{ color: C.gold, fontSize: 18, fontWeight: 700, marginTop: 10, wordBreak: 'break-all' }}>{code}</div>
         </div>
-        <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26 }}>
-          <div className="tk-body" style={{ color: C.mist, fontSize: 12, lineHeight: 1.6 }}>
-            La lettura funziona davvero — questo è il codice vero appena letto dalla fotocamera.
-            Il collegamento automatico a PSA/BGS/CGC per capire a quale carta corrisponde non è ancora
-            costruito — è il prossimo pezzo separato di cui parlavamo.
+
+        {lookup.status === 'loading' && (
+          <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26, textAlign: 'center' }}>
+            <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Cerco il certificato su PSA...</div>
           </div>
-        </div>
+        )}
+        {lookup.status === 'error' && (
+          <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26 }}>
+            <div className="tk-body" style={{ color: C.mist, fontSize: 12, lineHeight: 1.6 }}>
+              {lookup.data?.notFound ? 'Nessun certificato PSA trovato con questo numero — controlla che sia stato letto giusto.' : `Non sono riuscito a controllare ora: ${lookup.error}`}
+            </div>
+          </div>
+        )}
+        {lookup.status === 'ok' && lookup.data?.cardName && (
+          <>
+            <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26 }}>
+              <div className="tk-mono" style={{ color: C.gold, fontSize: 10, letterSpacing: 1.5, marginBottom: 6 }}>CARTA IDENTIFICATA</div>
+              <div className="tk-body" style={{ color: C.paper, fontSize: 14, fontWeight: 600 }}>{lookup.data.cardName}</div>
+              {lookup.data.grade && <div className="tk-body" style={{ color: C.mist, fontSize: 12, marginTop: 4 }}>Grado: {lookup.data.grade}</div>}
+            </div>
+            <div style={{ marginTop: 18 }}>
+              <div className="tk-mono" style={{ color: C.gold, fontSize: 10, letterSpacing: 1.5, marginBottom: 8, borderBottom: `1px solid ${C.line}`, paddingBottom: 6 }}>VENDITE COMPARABILI (STESSO GRADO)</div>
+              {(!lookup.data.sales || lookup.data.sales.length === 0) && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna vendita comparabile trovata ora.</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(lookup.data.sales || []).map((s, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <PlatformPill name={s.platform} />
+                        <span className="tk-mono" style={{ color: C.mist, fontSize: 10 }}>{s.grade}</span>
+                        <span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{s.date}</span>
+                      </div>
+                      <div className="tk-body" style={{ color: C.mist, fontSize: 10, marginTop: 3 }}>{s.saleType}</div>
+                    </div>
+                    <span className="tk-mono" style={{ color: C.paper, fontSize: 14, fontWeight: 700 }}>${s.price.toLocaleString('en-US')}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="tk-body" style={{ color: C.mist, fontSize: 9.5, marginTop: 8, fontStyle: 'italic' }}>dati dal certificato PSA ufficiale, letti ora — copre solo carte PSA per ora</div>
+            </div>
+          </>
+        )}
+
         <button onClick={onScanAgain} className="tk-body" style={{ width: '100%', marginTop: 16, padding: '12px 0', borderRadius: 10, cursor: 'pointer', border: `1px solid ${C.gold}`, background: `${C.gold}22`, color: C.gold, fontWeight: 600, fontSize: 13 }}>
           Scansiona un'altra carta
         </button>
