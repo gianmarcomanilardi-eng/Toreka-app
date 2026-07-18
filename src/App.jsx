@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards, fetchCardsByIds } from './supabaseClient.js';
+import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards, fetchCardsByIds, fetchPortfolioHistory } from './supabaseClient.js';
 
 /* ---------------------------------------------------------
    Design tokens
@@ -1788,15 +1788,40 @@ function SavedSearchesView({ savedSearches, onRemove, onRunSearch }) {
 
 function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
   const [state, setState] = useState({ status: 'loading', cards: [] });
+  const [history, setHistory] = useState([]);
   useEffect(() => {
-    if (!collection.length) { setState({ status: 'ok', cards: [] }); return; }
+    if (!collection.length) { setState({ status: 'ok', cards: [] }); setHistory([]); return; }
     setState((s) => ({ ...s, status: 'loading' }));
     fetchCardsByIds(collection)
       .then((cards) => setState({ status: 'ok', cards }))
       .catch((error) => setState({ status: 'error', cards: [], error: error.message || String(error) }));
+    fetchPortfolioHistory(collection).then(setHistory).catch(() => setHistory([]));
   }, [collection]);
 
   const total = state.cards.reduce((sum, c) => sum + (c.latestPrice ? c.latestPrice.price / (RATES[c.latestPrice.currency] ?? 1) : 0), 0);
+
+  // valore totale nel tempo: per ogni giorno con almeno un'osservazione,
+  // il valore di ogni carta è l'ULTIMO prezzo conosciuto fino a quel
+  // giorno (portato avanti se quel giorno specifico non ha una nuova
+  // osservazione per quella carta) — stesso modello di Collectr/CardLadder
+  const chartData = useMemo(() => {
+    if (history.length < 2) return [];
+    const byDay = new Map();
+    for (const p of history) {
+      const day = p.observed_at.slice(0, 10);
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day).push(p);
+    }
+    const days = Array.from(byDay.keys()).sort();
+    const knownPriceJpy = new Map();
+    return days.map((day) => {
+      for (const p of byDay.get(day)) {
+        knownPriceJpy.set(p.tcgdex_id, p.price / (RATES[p.currency] ?? 1));
+      }
+      const totalJpy = Array.from(knownPriceJpy.values()).reduce((sum, v) => sum + v, 0);
+      return { date: fmtDate(new Date(day)), value: totalJpy * RATES[currency] };
+    });
+  }, [history, currency]);
 
   return (
     <div className="tk-scroll" style={{ overflowY: 'auto', height: '100%', position: 'relative' }}>
@@ -1808,6 +1833,21 @@ function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
           <div className="tk-mono" style={{ color: C.paper, fontSize: 28, fontWeight: 700, marginTop: 4 }}>{fmtConverted(total * RATES[currency], currency)}</div>
           <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 2 }}>{collection.length} {collection.length === 1 ? 'carta' : 'carte'} in collezione · valore in base all'ultimo prezzo osservato</div>
         </div>
+        {chartData.length >= 2 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1, marginBottom: 6 }}>ANDAMENTO VALORE TOTALE</div>
+            <div style={{ width: '100%', height: 140 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                  <XAxis dataKey="date" tick={{ fill: C.mist, fontSize: 8 }} axisLine={{ stroke: C.line }} tickLine={false} />
+                  <YAxis hide domain={['dataMin', 'dataMax']} />
+                  <Tooltip contentStyle={{ background: C.ink2, border: `1px solid ${C.line}`, fontSize: 11 }} labelStyle={{ color: C.mist }} formatter={(v) => fmtConverted(v, currency)} />
+                  <Line type="monotone" dataKey="value" stroke={C.gold} strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
         {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, marginTop: 16 }}>{state.error}</div>}
         {state.status === 'ok' && collection.length === 0 && (
           <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 60, lineHeight: 1.6 }}>La tua collezione è vuota.<br />Aggiungi una carta dalla sua scheda.</div>

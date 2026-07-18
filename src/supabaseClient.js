@@ -231,3 +231,19 @@ export async function fetchCardsByIds(tcgdexIds) {
   if (pricesError) throw pricesError;
   return cards.map((c) => ({ ...c, latestPrice: prices.find((p) => p.tcgdex_id === c.tcgdex_id) || null }));
 }
+
+// Storico completo dei prezzi (venduti confermati) per le carte del
+// Portfolio — serve per il grafico del valore totale nel tempo, non
+// solo l'ultimo prezzo. Modello: come fanno Collectr/CardLadder,
+// "valore al prezzo più recente conosciuto per ogni giorno".
+export async function fetchPortfolioHistory(tcgdexIds) {
+  if (supabaseConfigError) throw new Error(supabaseConfigError);
+  if (!tcgdexIds.length) return [];
+  const { data, error } = await supabase
+    .from('price_observations').select('tcgdex_id, price, currency, observed_at')
+    .in('tcgdex_id', tcgdexIds).eq('confirmed', true)
+    .not('observed_at', 'is', null)
+    .order('observed_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
