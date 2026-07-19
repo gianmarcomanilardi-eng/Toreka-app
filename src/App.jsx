@@ -20,8 +20,8 @@ function topAccent(color) { return { borderTop: `3px solid ${color}` }; }
 
 const FONTS = (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
-    .tk-display { font-family: 'Space Grotesk', sans-serif; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+    .tk-display { font-family: 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.3px; }
     .tk-body { font-family: 'Inter', sans-serif; }
     .tk-mono { font-family: 'Space Mono', monospace; }
     .tk-scroll::-webkit-scrollbar { display: none; }
@@ -925,7 +925,7 @@ function quickChange30d(edition, id) { const s = buildSeries(edition.basePrice, 
 /* ---------------------------------------------------------
    Views
 ---------------------------------------------------------- */
-function HomeView({ onOpenCard, onOpenArticle, onGoBrowse, onOpenRealCard }) {
+function HomeView({ onOpenCard, onOpenArticle, onGoBrowse, onOpenRealCard, currency, setCurrency }) {
   const [real, setReal] = useState({ status: 'loading', cards: [] });
   useEffect(() => {
     fetchFeaturedRealCards(6)
@@ -938,6 +938,13 @@ function HomeView({ onOpenCard, onOpenArticle, onGoBrowse, onOpenRealCard }) {
       <GridTexture />
       <div style={{ position: 'relative', padding: '18px 16px 90px' }}>
         <TopBar title="Toreka" subtitle="トレカ ・ mercato JP / CN" />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="tk-mono" style={{
+            background: C.ink2, color: C.paper, border: `1px solid ${C.line}`, borderRadius: 10, padding: '6px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+          }}>
+            {Object.keys(SYMBOLS).map((cur) => <option key={cur} value={cur}>{cur}</option>)}
+          </select>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, marginBottom: 10 }}>
           <span className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5 }}>LE PIÙ QUOTATE ORA</span>
@@ -1737,8 +1744,13 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
     // il nome della specie (es. "リザードン" -> "Charizard") — senza
     // questo, cercare su eBay/PokeTrace con testo giapponese non trova
     // mai nulla, dato che le inserzioni eBay sono scritte in inglese
+    const isJapaneseSourced = card.lang === 'ja' || !card.name_en;
     const baseName = card.name_en || extractEnglishSpeciesName(card.name) || card.name;
-    const term = card.set_name ? `${baseName} ${card.set_name}` : baseName;
+    // per le carte di origine giapponese, aggiungo "Japanese" alla
+    // ricerca — altrimenti il motore cerca inserzioni generiche
+    // occidentali, non quelle della versione giapponese che esistono
+    // davvero su eBay ma sono descritte in modo diverso
+    const term = isJapaneseSourced ? `${baseName} Japanese` : (card.set_name ? `${baseName} ${card.set_name}` : baseName);
     fetch(`/api/live-price?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => {
@@ -1756,6 +1768,11 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
         const GENERIC_WORDS = new Set(["pokemon", "the", "tcg", "card", "cards"]);
         const stripGeneric = (s) => s.toLowerCase().split(/\s+/).filter((w) => !GENERIC_WORDS.has(w)).join(" ");
         const setLooksRelated = (r) => {
+          // per le carte di origine giapponese salto questo controllo:
+          // il nome del set salvato è in giapponese, non corrisponderà
+          // mai testualmente a quello che PokeTrace restituisce in
+          // inglese, anche quando il risultato è quello giusto
+          if (isJapaneseSourced) return true;
           if (!card.set_name || !r.set) return true;
           const a = stripGeneric(card.set_name);
           const b = stripGeneric(r.set);
@@ -1816,15 +1833,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
         <button onClick={() => toggleCollection(card.tcgdex_id)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
           {inColl ? <Check size={15} /> : <Plus size={15} />}<span style={{ fontWeight: 600, fontSize: 13 }}>{inColl ? 'Nella tua collezione' : 'Aggiungi alla collezione'}</span>
         </button>
-        {setCurrency && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
-            <SegmentTrack>
-              {Object.keys(SYMBOLS).map((cur) => (
-                <Chip key={cur} active={cur === currency} onClick={() => setCurrency(cur)}>{cur}</Chip>
-              ))}
-            </SegmentTrack>
-          </div>
-        )}
+
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
           <SegmentTrack>
             <Chip active={gradeFilter === 'all'} onClick={() => setGradeFilter('all')}>Tutte</Chip>
@@ -2242,7 +2251,7 @@ export default function TorekaPrototype() {
   function openArticle(a) { setArticle(a); setView('article'); }
 
   let screen;
-  if (view === 'home') screen = <HomeView onOpenCard={openCard} onOpenArticle={openArticle} onGoBrowse={() => nav('browse')} onOpenRealCard={openRealCard} />;
+  if (view === 'home') screen = <HomeView onOpenCard={openCard} onOpenArticle={openArticle} onGoBrowse={() => nav('browse')} onOpenRealCard={openRealCard} currency={currency} setCurrency={setCurrency} />;
   else if (view === 'browse') screen = <RealBrowseView key={navKey === 'browse' ? query : 'browse'} onOpenCard={openRealCard} onScan={() => setView('scan')} onManualCode={(code) => { setScannedCode(code); setView('scanresult'); }} initialQuery={query} savedSearches={savedSearches} onToggleSaved={toggleSavedSearch} />;
   else if (view === 'scan') screen = <ScanView onBack={() => setView(navKey)} onDetected={(code) => { setScannedCode(code); setView('scanresult'); }} onRawCardFound={openRealCard} />;
   else if (view === 'scanresult') screen = <ScanResultView code={scannedCode} onBack={() => setView(navKey)} onScanAgain={() => setView('scan')} />;
