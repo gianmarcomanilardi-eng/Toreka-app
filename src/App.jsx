@@ -11,11 +11,11 @@ import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards
    Design tokens
 ---------------------------------------------------------- */
 const C = {
-  ink: '#161310', ink2: '#211D18', ink3: '#2C2620', line: '#4A4136',
+  ink: '#17181B', ink2: '#212226', ink3: '#2B2D32', line: '#3C3F45',
   vermillion: '#FF4732', gold: '#E8B84B', jade: '#2ED573', teal: '#35C4B8',
   paper: '#F7F2E7', mist: '#A89D8C',
 };
-const PANEL = { background: C.ink2, border: `1px solid ${C.line}`, boxShadow: '0 6px 18px rgba(0,0,0,0.28)' };
+const PANEL = { background: C.ink2, border: `1.5px solid ${C.line}`, boxShadow: '0 6px 18px rgba(0,0,0,0.28)' };
 function topAccent(color) { return { borderTop: `3px solid ${color}` }; }
 
 const FONTS = (
