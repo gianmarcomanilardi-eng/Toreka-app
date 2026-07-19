@@ -11,11 +11,11 @@ import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards
    Design tokens
 ---------------------------------------------------------- */
 const C = {
-  ink: '#17181B', ink2: '#212226', ink3: '#2B2D32', line: '#3C3F45',
+  ink: '#1D1E22', ink2: '#292B31', ink3: '#34363E', line: '#3A3D45',
   vermillion: '#FF4732', gold: '#E8B84B', jade: '#2ED573', teal: '#35C4B8',
   paper: '#F7F2E7', mist: '#A89D8C',
 };
-const PANEL = { background: C.ink2, border: `1.5px solid ${C.line}`, boxShadow: '0 6px 18px rgba(0,0,0,0.28)' };
+const PANEL = { background: C.ink2, border: `1px solid ${C.line}55`, boxShadow: '0 8px 20px rgba(0,0,0,0.32)' };
 function topAccent(color) { return { borderTop: `3px solid ${color}` }; }
 
 const FONTS = (
@@ -936,7 +936,7 @@ function HomeView({ onOpenCard, onOpenArticle, onGoBrowse, onOpenRealCard }) {
           <span onClick={onGoBrowse} className="tk-body" style={{ color: C.mist, fontSize: 10.5, cursor: 'pointer' }}>tutte le carte →</span>
         </div>
         {real.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12, textAlign: 'center', padding: 20 }}>Carico dal database...</div>}
-        {real.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{real.error}</div>}
+        {real.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 14, padding: 12 }}>{real.error}</div>}
         {real.status === 'ok' && real.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna carta ancora nel database.</div>}
         {real.status === 'ok' && (
           <div className="tk-rise" style={{ ...PANEL, ...topAccent(C.gold), borderRadius: 14, overflow: 'hidden' }}>
@@ -997,7 +997,7 @@ function ArticleView({ item, onBack }) {
           <div className="tk-display" style={{ color: C.paper, fontSize: 21, fontWeight: 700, marginTop: 18, lineHeight: 1.3 }}>{item.title}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 18 }}>
             {item.qa.map((pair, i) => pair.pull ? (
-              <div key={i} style={{ background: C.ink3, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.gold}`, borderRadius: 10, padding: 16 }}>
+              <div key={i} style={{ background: C.ink3, border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.gold}`, borderRadius: 14, padding: 16 }}>
                 <Quote size={16} color={C.gold} />
                 <div className="tk-display" style={{ color: C.paper, fontSize: 14.5, fontWeight: 500, lineHeight: 1.5, marginTop: 6 }}>{pair.a}</div>
               </div>
@@ -1067,7 +1067,7 @@ function ScanView({ onBack, onDetected, onRawCardFound }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 22 }}>
             {Object.keys(CERT_INFO).map((co) => (
               <button key={co} onClick={() => { setCompany(co); setMode(CERT_INFO[co].defaultBarcode ? 'barcode' : 'text'); }} className="tk-body" style={{
-                ...PANEL, borderRadius: 12, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600,
+                ...PANEL, borderRadius: 16, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600,
               }}>
                 {co}
                 <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5, fontWeight: 400 }}>{CERT_INFO[co].digits[0]}-{CERT_INFO[co].digits[1]} cifre</span>
@@ -1075,7 +1075,7 @@ function ScanView({ onBack, onDetected, onRawCardFound }) {
             ))}
             {onRawCardFound && (
               <button onClick={() => setCompany('RAW')} className="tk-body" style={{
-                ...PANEL, borderRadius: 12, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600, borderColor: C.teal,
+                ...PANEL, borderRadius: 16, padding: 14, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: C.paper, fontSize: 14, fontWeight: 600, borderColor: C.teal,
               }}>
                 Carta raw (senza gradazione)
                 <span className="tk-mono" style={{ color: C.teal, fontSize: 9.5, fontWeight: 600 }}>NUOVO</span>
@@ -1098,7 +1098,7 @@ function ScanView({ onBack, onDetected, onRawCardFound }) {
         </div>
       </div>
       {hintOpen && (
-        <div onClick={() => setHintOpen(false)} style={{ position: 'absolute', top: 62, left: 16, right: 16, zIndex: 3, background: 'rgba(0,0,0,0.75)', border: `1px solid ${C.gold}`, borderRadius: 10, padding: 12, cursor: 'pointer' }}>
+        <div onClick={() => setHintOpen(false)} style={{ position: 'absolute', top: 62, left: 16, right: 16, zIndex: 3, background: 'rgba(0,0,0,0.75)', border: `1px solid ${C.gold}`, borderRadius: 14, padding: 12, cursor: 'pointer' }}>
           <div className="tk-body" style={{ color: C.paper, fontSize: 11.5, lineHeight: 1.5 }}>{company}: {info.hint}</div>
           <div className="tk-body" style={{ color: C.mist, fontSize: 9.5, marginTop: 4 }}>tocca per chiudere</div>
         </div>
@@ -1143,7 +1143,7 @@ function BarcodeScanMode({ onDetected }) {
       )}
       {status === 'scanning' && (
         <>
-          <div style={{ position: 'absolute', top: '32%', left: '15%', right: '15%', bottom: '42%', border: `2px solid ${C.gold}`, borderRadius: 12, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }} />
+          <div style={{ position: 'absolute', top: '32%', left: '15%', right: '15%', bottom: '42%', border: `2px solid ${C.gold}`, borderRadius: 16, boxShadow: '0 0 0 2000px rgba(0,0,0,0.35)' }} />
           <div style={{ position: 'absolute', bottom: 110, left: 0, right: 0, textAlign: 'center' }}><span className="tk-mono" style={{ color: C.gold, fontSize: 11, background: 'rgba(0,0,0,0.6)', padding: '5px 14px', borderRadius: 20 }}>● lettura attiva — cerca in automatico</span></div>
           <div style={{ position: 'absolute', bottom: 32, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
             <button onClick={() => setRestartTick((t) => t + 1)} style={{ width: 72, height: 72, borderRadius: '50%', background: C.vermillion, border: `4px solid ${C.paper}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Riavvia se bloccata"><ScanLine size={26} color={C.paper} /></button>
@@ -1377,11 +1377,11 @@ function TextScanMode({ onDetected, certInfo }) {
               </div>
             </>
           ) : (
-            <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px dashed ${C.gold}88`, borderRadius: 10 }} />
+            <div style={{ position: 'absolute', top: '38%', left: '10%', right: '10%', height: 70, border: `2px dashed ${C.gold}88`, borderRadius: 14 }} />
           )}
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.75)', padding: '16px 20px calc(24px + env(safe-area-inset-bottom))' }}>
             {ocr.phase === 'idle' && (
-              <button onClick={captureAndRead} className="tk-body" style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: C.vermillion, color: C.paper, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Fotografa e leggi il numero</button>
+              <button onClick={captureAndRead} className="tk-body" style={{ width: '100%', padding: '13px 0', borderRadius: 14, border: 'none', background: C.vermillion, color: C.paper, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Fotografa e leggi il numero</button>
             )}
             {ocr.phase === 'working' && (
               <div className="tk-body" style={{ color: C.paper, fontSize: 13, textAlign: 'center', padding: '13px 0' }}>Analizzo la foto in più modi...</div>
@@ -1404,8 +1404,8 @@ function TextScanMode({ onDetected, certInfo }) {
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input value={ocr.text} onChange={(e) => setOcr({ ...ocr, text: (certInfo && certInfo.alphanumeric ? e.target.value.replace(/[^A-Za-z0-9]/g, '') : e.target.value.replace(/[^0-9]/g, '')) })} inputMode={certInfo && certInfo.alphanumeric ? 'text' : 'numeric'} pattern={certInfo && certInfo.alphanumeric ? undefined : '[0-9]*'} className="tk-mono"
-                    style={{ flex: 1, background: C.ink2, border: `1px solid ${lenOk ? C.gold : C.vermillion}`, borderRadius: 10, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
-                  <button onClick={() => ocr.text.trim() && onDetected(ocr.text.trim())} className="tk-body" style={{ padding: '0 18px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Conferma</button>
+                    style={{ flex: 1, background: C.ink2, border: `1px solid ${lenOk ? C.gold : C.vermillion}`, borderRadius: 14, padding: '10px 12px', color: C.paper, fontSize: 14, outline: 'none' }} />
+                  <button onClick={() => ocr.text.trim() && onDetected(ocr.text.trim())} className="tk-body" style={{ padding: '0 18px', borderRadius: 14, border: 'none', background: C.gold, color: C.ink, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Conferma</button>
                 </div>
                 <div onClick={() => setOcr({ phase: 'idle', text: '', candidates: [] })} className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 10, textAlign: 'center', cursor: 'pointer', textDecoration: 'underline' }}>riprova la foto</div>
               </div>
@@ -1491,7 +1491,7 @@ function RawCardScanMode({ onFound }) {
           <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginBottom: 8 }}>letto: "{ocr.readText}"</div>
           {ocr.phase === 'notfound' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5 }}>Nessuna corrispondenza trovata nel catalogo — riprova con più luce o più vicino al nome della carta.</div>}
           {ocr.candidates.map((c) => (
-            <div key={c.tcgdex_id} onClick={() => onFound(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: 10, marginBottom: 8, cursor: 'pointer' }}>
+            <div key={c.tcgdex_id} onClick={() => onFound(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 14, padding: 10, marginBottom: 8, cursor: 'pointer' }}>
               <div style={{ width: 36 }}><CardArt hue={(c.tcgdex_id.length * 37) % 360} label={(c.name_en || c.name || '?').slice(0, 2)} imageUrl={c.image_url} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name_en || c.name}</div>
@@ -1499,7 +1499,7 @@ function RawCardScanMode({ onFound }) {
               </div>
             </div>
           ))}
-          <button onClick={() => setOcr({ phase: 'idle', candidates: [], readText: '' })} className="tk-body" style={{ width: '100%', marginTop: 4, padding: '10px 0', borderRadius: 10, border: `1px solid ${C.line}`, background: 'transparent', color: C.mist, fontSize: 12.5, cursor: 'pointer' }}>Riprova</button>
+          <button onClick={() => setOcr({ phase: 'idle', candidates: [], readText: '' })} className="tk-body" style={{ width: '100%', marginTop: 4, padding: '10px 0', borderRadius: 14, border: `1px solid ${C.line}`, background: 'transparent', color: C.mist, fontSize: 12.5, cursor: 'pointer' }}>Riprova</button>
         </div>
       )}
     </>
@@ -1527,12 +1527,12 @@ function ScanResultView({ code, onBack, onScanAgain }) {
         </div>
 
         {lookup.status === 'loading' && (
-          <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26, textAlign: 'center' }}>
+          <div style={{ ...PANEL, borderRadius: 16, padding: 16, marginTop: 26, textAlign: 'center' }}>
             <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Cerco il certificato su PSA...</div>
           </div>
         )}
         {lookup.status === 'error' && (
-          <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26 }}>
+          <div style={{ ...PANEL, borderRadius: 16, padding: 16, marginTop: 26 }}>
             <div className="tk-body" style={{ color: C.mist, fontSize: 12, lineHeight: 1.6 }}>
               {lookup.data?.notFound ? 'Nessun certificato PSA trovato con questo numero — controlla che sia stato letto giusto.' : `Non sono riuscito a controllare ora: ${lookup.error}`}
             </div>
@@ -1540,7 +1540,7 @@ function ScanResultView({ code, onBack, onScanAgain }) {
         )}
         {lookup.status === 'ok' && lookup.data?.cardName && (
           <>
-            <div style={{ ...PANEL, borderRadius: 12, padding: 16, marginTop: 26 }}>
+            <div style={{ ...PANEL, borderRadius: 16, padding: 16, marginTop: 26 }}>
               <div className="tk-mono" style={{ color: C.gold, fontSize: 10, letterSpacing: 1.5, marginBottom: 6 }}>CARTA IDENTIFICATA</div>
               <div className="tk-body" style={{ color: C.paper, fontSize: 14, fontWeight: 600 }}>{lookup.data.cardName}</div>
               {lookup.data.grade && <div className="tk-body" style={{ color: C.mist, fontSize: 12, marginTop: 4 }}>Grado: {lookup.data.grade}</div>}
@@ -1557,7 +1557,7 @@ function ScanResultView({ code, onBack, onScanAgain }) {
               {(!lookup.data.sales || lookup.data.sales.length === 0) && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna vendita comparabile trovata ora.</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(lookup.data.sales || []).map((s, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 14, padding: '10px 12px' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <PlatformPill name={s.platform} />
@@ -1575,7 +1575,7 @@ function ScanResultView({ code, onBack, onScanAgain }) {
           </>
         )}
 
-        <button onClick={onScanAgain} className="tk-body" style={{ width: '100%', marginTop: 16, padding: '12px 0', borderRadius: 10, cursor: 'pointer', border: `1px solid ${C.gold}`, background: `${C.gold}22`, color: C.gold, fontWeight: 600, fontSize: 13 }}>
+        <button onClick={onScanAgain} className="tk-body" style={{ width: '100%', marginTop: 16, padding: '12px 0', borderRadius: 14, cursor: 'pointer', border: `1px solid ${C.gold}`, background: `${C.gold}22`, color: C.gold, fontWeight: 600, fontSize: 13 }}>
           Scansiona un'altra carta
         </button>
       </div>
@@ -1585,7 +1585,7 @@ function ScanResultView({ code, onBack, onScanAgain }) {
 
 function RealCardRow({ card, onOpen }) {
   return (
-    <div onClick={() => onOpen(card)} className="tk-rise" style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10 }}>
+    <div onClick={() => onOpen(card)} className="tk-rise" style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 16, padding: 10 }}>
       <div style={{ width: 46 }}><CardArt hue={(card.tcgdex_id.length * 37) % 360} label={(card.name_en || card.name || '?').slice(0, 2)} imageUrl={card.image_url} /></div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="tk-body" style={{ color: C.paper, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.name_en || card.name}</div>
@@ -1640,17 +1640,17 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
       <div style={{ position: 'relative', padding: '18px 16px 8px' }}>
         <TopBar title="Toreka" subtitle="トレカ ・ catalogo reale" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 12px' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 14, padding: '9px 12px' }}>
             <Search size={15} color={C.mist} />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cerca tra le carte vere..." className="tk-body"
               style={{ background: 'transparent', border: 'none', outline: 'none', color: C.paper, fontSize: 13.5, width: '100%' }} />
           </div>
           {query.trim() && onToggleSaved && (
-            <button onClick={() => onToggleSaved(query)} style={{ width: 38, height: 38, borderRadius: 10, background: isSaved ? C.gold : C.ink2, border: `1px solid ${isSaved ? C.gold : C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Salva questa ricerca">
+            <button onClick={() => onToggleSaved(query)} style={{ width: 38, height: 38, borderRadius: 14, background: isSaved ? C.gold : C.ink2, border: `1px solid ${isSaved ? C.gold : C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Salva questa ricerca">
               <Star size={16} color={isSaved ? C.ink : C.mist} fill={isSaved ? C.ink : 'none'} />
             </button>
           )}
-          <button onClick={onScan} style={{ width: 38, height: 38, borderRadius: 10, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona una carta gradata"><ScanLine size={17} color={C.paper} /></button>
+          <button onClick={onScan} style={{ width: 38, height: 38, borderRadius: 14, background: C.vermillion, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }} title="Scansiona una carta gradata"><ScanLine size={17} color={C.paper} /></button>
         </div>
         {!manualOpen ? (
           <div onClick={() => setManualOpen(true)} className="tk-body" style={{ color: C.mist, fontSize: 11, marginTop: 8, cursor: 'pointer', textDecoration: 'underline' }}>
@@ -1659,8 +1659,8 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
         ) : (
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <input value={manualValue} onChange={(e) => setManualValue(e.target.value)} placeholder="Numero certificato (es. 0018299244)" className="tk-mono"
-              style={{ flex: 1, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 12px', color: C.paper, fontSize: 13, outline: 'none' }} />
-            <button onClick={() => { if (manualValue.trim()) { onManualCode(manualValue.trim()); setManualValue(''); setManualOpen(false); } }} className="tk-body" style={{ padding: '0 16px', borderRadius: 10, border: 'none', background: C.gold, color: C.ink, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>Vai</button>
+              style={{ flex: 1, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 14, padding: '9px 12px', color: C.paper, fontSize: 13, outline: 'none' }} />
+            <button onClick={() => { if (manualValue.trim()) { onManualCode(manualValue.trim()); setManualValue(''); setManualOpen(false); } }} className="tk-body" style={{ padding: '0 16px', borderRadius: 14, border: 'none', background: C.gold, color: C.ink, fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>Vai</button>
           </div>
         )}
         <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
@@ -1672,7 +1672,7 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
         {mode === 'search' && (
           <>
             {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Cerco...</div>}
-            {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{state.error}</div>}
+            {state.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 14, padding: 12 }}>{state.error}</div>}
             {state.status === 'ok' && (
               <>
                 <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 8 }}>{state.cards.length} risultati {!query && '(ultime aggiunte — scrivi per cercare tra tutte)'}</div>
@@ -1690,7 +1690,7 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
             {setsState.status === 'ok' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {setsState.sets.map((s) => (
-                  <div key={s.setName} onClick={() => setActiveSet(s.setName)} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+                  <div key={s.setName} onClick={() => setActiveSet(s.setName)} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 16, padding: 10, cursor: 'pointer' }}>
                     <div style={{ width: '100%' }}><CardArt hue={(s.setName.length * 37) % 360} label={s.setName.slice(0, 2)} imageUrl={s.image} /></div>
                     <div className="tk-body" style={{ color: C.paper, fontSize: 11.5, fontWeight: 600, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.setName}</div>
                     <div className="tk-body" style={{ color: C.mist, fontSize: 10, marginTop: 1 }}>{s.count} cart{s.count === 1 ? 'a' : 'e'}</div>
@@ -1706,7 +1706,7 @@ function RealBrowseView({ onOpenCard, onScan, onManualCode, initialQuery, savedS
               <ChevronLeft size={14} color={C.paper} /><span className="tk-body" style={{ color: C.paper, fontSize: 12 }}>{activeSet}</span>
             </button>
             {setCardsState.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Carico le carte del set...</div>}
-            {setCardsState.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 10, padding: 12 }}>{setCardsState.error}</div>}
+            {setCardsState.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 14, padding: 12 }}>{setCardsState.error}</div>}
             {setCardsState.status === 'ok' && setCardsState.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12.5, textAlign: 'center', marginTop: 20 }}>Nessuna carta trovata per questo set.</div>}
             {setCardsState.status === 'ok' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1810,7 +1810,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
             <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 8, fontStyle: 'italic' }}>Non ancora abbinata a un catalogo — nome originale dalla fonte.</div>
           )}
         </div>
-        <button onClick={() => toggleCollection(card.tcgdex_id)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
+        <button onClick={() => toggleCollection(card.tcgdex_id)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
           {inColl ? <Check size={15} /> : <Plus size={15} />}<span style={{ fontWeight: 600, fontSize: 13 }}>{inColl ? 'Nella tua collezione' : 'Aggiungi alla collezione'}</span>
         </button>
         {setCurrency && (
@@ -1839,7 +1839,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
           {tierEstimates.length > 1 && (
             <div style={{ display: 'flex', gap: 6, marginTop: 12, overflowX: 'auto', paddingBottom: 4, justifyContent: tierEstimates.length <= 4 ? 'center' : 'flex-start' }}>
               {tierEstimates.map((t) => (
-                <div key={t.tier} style={{ flexShrink: 0, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '6px 10px', minWidth: 68 }}>
+                <div key={t.tier} style={{ flexShrink: 0, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 14, padding: '6px 10px', minWidth: 68 }}>
                   <div className="tk-mono" style={{ color: C.mist, fontSize: 9 }}>{t.tier}</div>
                   <div className="tk-mono" style={{ color: C.paper, fontSize: 12.5, fontWeight: 700 }}>{fmtConverted(t.jpy * RATES[currency], currency)}</div>
                 </div>
@@ -1850,7 +1850,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
 
         {live.status === 'ok' && live.results.slice(0, 1).map((r, i) => (
           r.confirmedSales.length > 0 && (
-            <div key={i} style={{ marginTop: 16, background: C.ink2, border: `1px solid ${C.gold}55`, borderRadius: 10, padding: '10px 12px' }}>
+            <div key={i} style={{ marginTop: 16, background: C.ink2, border: `1px solid ${C.gold}55`, borderRadius: 14, padding: '10px 12px' }}>
               <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1 }}>TROVATO DAL VIVO ORA (eBay, non ancora salvato)</div>
               <div className="tk-body" style={{ color: C.paper, fontSize: 12, marginTop: 4 }}>{r.name}{r.set ? ` — ${r.set}` : ''}</div>
               {r.confirmedSales.map((s, j) => (
@@ -1906,7 +1906,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
           {state.status === 'ok' && listedSorted.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna inserzione attiva registrata per questa carta.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {listedSorted.map((p) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 14, padding: '10px 12px' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <PlatformPill name={p.source} />
@@ -1939,7 +1939,7 @@ function SavedSearchesView({ savedSearches, onRemove, onRunSearch }) {
         )}
         <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {savedSearches.map((s) => (
-            <div key={s.term} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
+            <div key={s.term} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 16, padding: 12 }}>
               <div onClick={() => onRunSearch(s.term)} style={{ flex: 1, cursor: 'pointer', minWidth: 0 }}>
                 <div className="tk-body" style={{ color: C.paper, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.term}</div>
                 <div className="tk-body" style={{ color: C.mist, fontSize: 10.5, marginTop: 2 }}>salvata il {new Date(s.savedAt).toLocaleDateString('it-IT')}</div>
@@ -2028,7 +2028,7 @@ function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
         {state.status === 'ok' && collection.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
             {state.cards.map((c) => (
-              <div key={c.tcgdex_id} onClick={() => onOpenCard(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+              <div key={c.tcgdex_id} onClick={() => onOpenCard(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 16, padding: 10, cursor: 'pointer' }}>
                 <div style={{ width: 44 }}><CardArt hue={(c.tcgdex_id.length * 37) % 360} label={(c.name_en || c.name || '?').slice(0, 2)} imageUrl={c.image_url} /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="tk-body" style={{ color: C.paper, fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name_en || c.name}</div>
@@ -2055,7 +2055,7 @@ function PriceChart({ cardId, edition, company, grade, mult, currency, range, se
   const rangeChangePct = ((chartData[chartData.length - 1].price - chartData[0].price) / chartData[0].price) * 100;
   const tickEvery = Math.max(1, Math.floor(chartData.length / 5));
   return (
-    <div style={{ background: C.ink2, border: `1px solid ${C.gold}88`, borderRadius: 12, overflow: 'hidden' }}>
+    <div style={{ background: C.ink2, border: `1px solid ${C.gold}88`, borderRadius: 16, overflow: 'hidden' }}>
       <div style={{ background: C.ink3, padding: '6px 14px', display: 'flex', justifyContent: 'space-between' }}>
         <span className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1.5 }}>PREZZO · {company} {GRADE_SCALES[company].find(x => x.g === grade)?.label}</span>
         <span className="tk-mono" style={{ color: rangeChangePct >= 0 ? C.jade : C.vermillion, fontSize: 10.5, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>{rangeChangePct >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}{Math.abs(rangeChangePct).toFixed(1)}%</span>
@@ -2128,7 +2128,7 @@ function DetailView({ card, onBack, currency, setCurrency, collection, toggleCol
           <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}><GradeSlab co={company} label={gradeLabel} size="lg" /></div>
         </div>
 
-        <button onClick={() => toggleCollection(card.id, editionLang, company, grade)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
+        <button onClick={() => toggleCollection(card.id, editionLang, company, grade)} className="tk-body" style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: `1px solid ${inColl ? C.jade : C.line}`, background: inColl ? `${C.jade}1A` : C.ink2, color: inColl ? C.jade : C.paper }}>
           {inColl ? <Check size={15} /> : <Plus size={15} />}<span style={{ fontWeight: 600, fontSize: 13 }}>{inColl ? 'Nella tua collezione' : 'Aggiungi alla collezione'}</span>
         </button>
 
@@ -2144,7 +2144,7 @@ function DetailView({ card, onBack, currency, setCurrency, collection, toggleCol
           {showFallback && <div className="tk-body" style={{ color: C.mist, fontSize: 11, marginBottom: 8, fontStyle: 'italic' }}>Nessuna vendita confermata registrata per {company} {gradeLabel} su questa carta — ecco le vendite recenti agli altri gradi.</div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {salesToShow.map((s, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 12px' }}>
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 14, padding: '10px 12px' }}>
                 <div><div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}><PlatformPill name={s.pf} /><span className="tk-mono" style={{ color: C.mist, fontSize: 10 }}>{s.co} {GRADE_SCALES[s.co].find(x => x.g === s.g)?.label ?? s.g}</span><span className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>{s.date}</span></div><div style={{ marginTop: 4 }}><ConfirmedSeal /></div></div>
                 <span className="tk-mono" style={{ color: C.paper, fontSize: 14, fontWeight: 700 }}>{fmt(s.price, currency)}</span>
               </div>
