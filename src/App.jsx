@@ -1801,7 +1801,7 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
         <div className="tk-body" style={{ color: C.mist, fontSize: 11.5 }}>{card.set_name || card.set_code} {card.local_id ? `· ${card.local_id}` : ''}</div>
       </div>
       <div className="tk-rise" style={{ position: 'relative', padding: '10px 16px 0' }}>
-        <div style={{ width: 130, margin: '0 auto' }}><CardArt hue={(card.tcgdex_id.length * 37) % 360} label={(card.name_en || card.name || '?').slice(0, 2)} imageUrl={card.image_url} /></div>
+        <div style={{ width: 190, margin: '0 auto' }}><CardArt hue={(card.tcgdex_id.length * 37) % 360} label={(card.name_en || card.name || '?').slice(0, 2)} imageUrl={card.image_url} /></div>
         <div style={{ textAlign: 'center', marginTop: 14 }}>
           <div className="tk-display" style={{ color: C.paper, fontSize: 19, fontWeight: 700 }}>{card.name_en || card.name}</div>
           {card.name_en && card.name !== card.name_en && <div className="tk-body" style={{ color: C.mist, fontSize: 12, marginTop: 2 }}>{card.name}</div>}

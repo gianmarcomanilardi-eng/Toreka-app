@@ -143,12 +143,14 @@ export async function fetchCardPrices(tcgdexId) {
   const targetName = normalizeForMatch(thisCard.name_en || thisCard.name);
   const targetSet = normalizeForMatch(thisCard.set_name);
 
-  // prendo un campione ampio di carte con nome simile (per parola
-  // chiave), poi filtro con precisione lato client sul nome+set
-  // normalizzati — evita di dover indicizzare una funzione SQL apposta
-  const keyword = targetName.split(' ').filter(Boolean)[0] || targetName;
+  // provo più parole del nome, non solo la prima — "prima parola sola"
+  // perdeva collegamenti quando il nome inizia con una parola comune
+  // (es. "Mega", "Shining") condivisa da molte carte diverse
+  const words = targetName.split(' ').filter((w) => w.length > 1);
+  const keywords = words.length ? words.slice(0, 3) : [targetName];
+  const orParts = keywords.flatMap((k) => [`name.ilike.%${k}%`, `name_en.ilike.%${k}%`]).join(',');
   const { data: candidates, error: candError } = await supabase.from('cards').select('tcgdex_id, name, name_en, set_name')
-    .or(`name.ilike.%${keyword}%,name_en.ilike.%${keyword}%`).limit(500);
+    .or(orParts).limit(500);
   if (candError) throw candError;
 
   const matchingIds = (candidates || [])
