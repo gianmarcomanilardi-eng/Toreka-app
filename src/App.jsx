@@ -917,7 +917,6 @@ function TopBar({ title, subtitle }) {
         <div className="tk-display" style={{ color: C.paper, fontSize: 23, fontWeight: 700, letterSpacing: -0.5 }}>{title}</div>
         <div className="tk-body" style={{ color: C.mist, fontSize: 11, letterSpacing: 0.5 }}>{subtitle}</div>
       </div>
-      <span className="tk-mono" style={{ fontSize: 9.5, color: C.gold, border: `1px solid ${C.gold}`, borderRadius: 3, padding: '2px 6px' }}>BETA</span>
     </div>
   );
 }
@@ -944,9 +943,9 @@ function HomeView({ onOpenCard, onOpenArticle, onGoBrowse, onOpenRealCard }) {
           <span className="tk-mono" style={{ color: C.gold, fontSize: 10.5, letterSpacing: 1.5 }}>LE PIÙ QUOTATE ORA</span>
           <span onClick={onGoBrowse} className="tk-body" style={{ color: C.mist, fontSize: 10.5, cursor: 'pointer' }}>tutte le carte →</span>
         </div>
-        {real.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12, textAlign: 'center', padding: 20 }}>Carico dal database...</div>}
+        {real.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 12, textAlign: 'center', padding: 20 }}>Carico le carte...</div>}
         {real.status === 'error' && <div className="tk-body" style={{ color: C.vermillion, fontSize: 12, background: C.ink2, border: `1px solid ${C.vermillion}`, borderRadius: 14, padding: 12 }}>{real.error}</div>}
-        {real.status === 'ok' && real.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna carta ancora nel database.</div>}
+        {real.status === 'ok' && real.cards.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 12 }}>Nessuna carta trovata al momento.</div>}
         {real.status === 'ok' && (
           <div className="tk-rise" style={{ ...PANEL, ...topAccent(C.gold), borderRadius: 14, overflow: 'hidden' }}>
             {real.cards.map((c, i) => (
@@ -969,12 +968,7 @@ function HomeView({ onOpenCard, onOpenArticle, onGoBrowse, onOpenRealCard }) {
           <span className="tk-mono" style={{ color: C.teal, fontSize: 10.5, letterSpacing: 1.5 }}>DALLA COMMUNITY</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {INTERVIEWS.map((it) => it.comingSoon ? (
-            <div key={it.id} style={{ border: `1px dashed ${C.line}`, borderRadius: 14, padding: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.ink3, border: `1px solid ${C.line}` }} />
-              <span className="tk-body" style={{ color: C.mist, fontSize: 11.5, fontStyle: 'italic' }}>{it.teaser}</span>
-            </div>
-          ) : (
+          {INTERVIEWS.filter((it) => !it.comingSoon).map((it) => (
             <div key={it.id} onClick={() => onOpenArticle(it)} className="tk-rise" style={{ ...PANEL, ...topAccent(C.teal), borderRadius: 14, padding: 14, cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 42 }}><CardArt hue={it.hue} label={it.name.split(' ')[0][0]} round /></div>
