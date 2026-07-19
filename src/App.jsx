@@ -3,7 +3,7 @@ import {
   Search, ChevronLeft, Home, User, Wallet, TrendingUp, TrendingDown,
   CheckCircle2, ScanLine, Youtube, Quote, ArrowRight, Sparkles, Plus, Check, Clock, Globe2, X, Star
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { fetchRawCards, searchRealCards, fetchCardPrices, fetchFeaturedRealCards, fetchCardsByIds, fetchPortfolioHistory, fetchAllSets, fetchCardsBySet } from './supabaseClient.js';
 
@@ -15,7 +15,7 @@ const C = {
   vermillion: '#FF4732', gold: '#E8B84B', jade: '#2ED573', teal: '#35C4B8',
   paper: '#F7F2E7', mist: '#A89D8C',
 };
-const PANEL = { background: C.ink2, border: `1px solid ${C.line}55`, boxShadow: '0 8px 20px rgba(0,0,0,0.32)' };
+const PANEL = { background: C.ink2, border: `1px solid ${C.line}55`, boxShadow: '0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)' };
 function topAccent(color) { return { borderTop: `3px solid ${color}` }; }
 
 const FONTS = (
@@ -890,7 +890,16 @@ function Disclaimer() {
   );
 }
 function Chip({ active, onClick, children }) {
-  return <button onClick={onClick} className="tk-mono" style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, cursor: 'pointer', flexShrink: 0, fontWeight: 700, border: `1px solid ${active ? C.gold : C.line}`, background: active ? C.gold : 'transparent', color: active ? C.ink : C.mist }}>{children}</button>;
+  return <button onClick={onClick} className="tk-mono" style={{
+    fontSize: 11, padding: '6px 14px', borderRadius: 20, cursor: 'pointer', flexShrink: 0, fontWeight: 700, border: 'none',
+    background: active ? `linear-gradient(180deg, ${C.gold}, #C99A2E)` : 'transparent',
+    color: active ? C.ink : C.mist,
+    boxShadow: active ? '0 3px 10px rgba(232,184,75,0.35), inset 0 1px 0 rgba(255,255,255,0.25)' : 'none',
+    transition: 'all 0.15s ease',
+  }}>{children}</button>;
+}
+function SegmentTrack({ children }) {
+  return <div className="tk-hscroll" style={{ display: 'inline-flex', gap: 2, padding: 4, borderRadius: 24, background: C.ink, border: `1px solid ${C.line}55`, boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.35)' }}>{children}</div>;
 }
 function GridTexture() {
   return (
@@ -1814,16 +1823,20 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
           {inColl ? <Check size={15} /> : <Plus size={15} />}<span style={{ fontWeight: 600, fontSize: 13 }}>{inColl ? 'Nella tua collezione' : 'Aggiungi alla collezione'}</span>
         </button>
         {setCurrency && (
-          <div className="tk-hscroll" style={{ display: 'flex', gap: 6, marginTop: 14, justifyContent: 'center' }}>
-            {Object.keys(SYMBOLS).map((cur) => (
-              <Chip key={cur} active={cur === currency} onClick={() => setCurrency(cur)}>{cur}</Chip>
-            ))}
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+            <SegmentTrack>
+              {Object.keys(SYMBOLS).map((cur) => (
+                <Chip key={cur} active={cur === currency} onClick={() => setCurrency(cur)}>{cur}</Chip>
+              ))}
+            </SegmentTrack>
           </div>
         )}
-        <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'center' }}>
-          <Chip active={gradeFilter === 'all'} onClick={() => setGradeFilter('all')}>Tutte</Chip>
-          <Chip active={gradeFilter === 'graded'} onClick={() => setGradeFilter('graded')}>Gradate</Chip>
-          <Chip active={gradeFilter === 'raw'} onClick={() => setGradeFilter('raw')}>Raw</Chip>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+          <SegmentTrack>
+            <Chip active={gradeFilter === 'all'} onClick={() => setGradeFilter('all')}>Tutte</Chip>
+            <Chip active={gradeFilter === 'graded'} onClick={() => setGradeFilter('graded')}>Gradate</Chip>
+            <Chip active={gradeFilter === 'raw'} onClick={() => setGradeFilter('raw')}>Raw</Chip>
+          </SegmentTrack>
         </div>
 
         <div style={{ marginTop: 20, textAlign: 'center' }}>
@@ -1889,12 +1902,18 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
             ) : (
               <div style={{ width: '100%', height: 150 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-                    <XAxis dataKey="date" tick={{ fill: C.mist, fontSize: 8 }} axisLine={{ stroke: C.line }} tickLine={false} />
+                  <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="andamentoFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.gold} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={C.gold} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" tick={{ fill: C.mist, fontSize: 8 }} axisLine={false} tickLine={false} />
                     <YAxis hide domain={['dataMin', 'dataMax']} />
-                    <Tooltip contentStyle={{ background: C.ink2, border: `1px solid ${C.line}`, fontSize: 11 }} labelStyle={{ color: C.mist }} formatter={(v) => fmtConverted(v, currency)} />
-                    <Line type="monotone" dataKey="value" stroke={C.gold} strokeWidth={2} dot={{ r: 2, fill: C.gold }} />
-                  </LineChart>
+                    <Tooltip contentStyle={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, fontSize: 11 }} labelStyle={{ color: C.mist }} formatter={(v) => fmtConverted(v, currency)} />
+                    <Area type="monotone" dataKey="value" stroke={C.gold} strokeWidth={2.5} fill="url(#andamentoFill)" dot={false} activeDot={{ r: 4, fill: C.gold, stroke: C.ink, strokeWidth: 2 }} />
+                  </AreaChart>
                 </ResponsiveContainer>
               </div>
             )}
@@ -2011,12 +2030,18 @@ function PortfolioView({ collection, onRemove, onOpenCard, currency }) {
             <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1, marginBottom: 6 }}>ANDAMENTO VALORE TOTALE</div>
             <div style={{ width: '100%', height: 140 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-                  <XAxis dataKey="date" tick={{ fill: C.mist, fontSize: 8 }} axisLine={{ stroke: C.line }} tickLine={false} />
+                <AreaChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="portfolioFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.jade} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={C.jade} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" tick={{ fill: C.mist, fontSize: 8 }} axisLine={false} tickLine={false} />
                   <YAxis hide domain={['dataMin', 'dataMax']} />
-                  <Tooltip contentStyle={{ background: C.ink2, border: `1px solid ${C.line}`, fontSize: 11 }} labelStyle={{ color: C.mist }} formatter={(v) => fmtConverted(v, currency)} />
-                  <Line type="monotone" dataKey="value" stroke={C.gold} strokeWidth={2} dot={false} />
-                </LineChart>
+                  <Tooltip contentStyle={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 10, fontSize: 11 }} labelStyle={{ color: C.mist }} formatter={(v) => fmtConverted(v, currency)} />
+                  <Area type="monotone" dataKey="value" stroke={C.jade} strokeWidth={2.5} fill="url(#portfolioFill)" dot={false} activeDot={{ r: 4, fill: C.jade, stroke: C.ink, strokeWidth: 2 }} />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
