@@ -1746,23 +1746,37 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
     // mai nulla, dato che le inserzioni eBay sono scritte in inglese
     const isJapaneseSourced = card.lang === 'ja' || !card.name_en;
     const baseName = card.name_en || extractEnglishSpeciesName(card.name) || card.name;
-    const termPokeTrace = isJapaneseSourced ? `${baseName} Japanese` : (card.set_name ? `${baseName} ${card.set_name}` : baseName);
-    const termPriceCharting = isJapaneseSourced ? `${baseName} Japanese` : baseName;
+
+    // per le carte di origine giapponese cerco SOLO la versione
+    // giapponese, senza mescolare quella occidentale (restano due
+    // mercati separati, come già stabilito) — una ricerca sola, mirata
+    const pokeTraceQueries = isJapaneseSourced
+      ? [`${baseName} Japanese`]
+      : [card.set_name ? `${baseName} ${card.set_name}` : baseName];
+    const priceChartingQueries = isJapaneseSourced ? [`${baseName} Japanese`] : [baseName];
+
+    const pokeTraceFetches = pokeTraceQueries.map((q) => fetch(`/api/live-price?q=${encodeURIComponent(q)}`, { cache: 'no-store' }).then((r) => r.json()));
+    const priceChartingFetches = priceChartingQueries.map((q) => fetch(`/api/live-pricecharting?q=${encodeURIComponent(q)}`, { cache: 'no-store' }).then((r) => r.json()));
 
     // prendo da PIÙ fonti insieme, senza scartare risultati per un
     // controllo di somiglianza — ogni risultato mostra la sua fonte,
     // chi guarda giudica da sé cosa è rilevante
-    Promise.allSettled([
-      fetch(`/api/live-price?q=${encodeURIComponent(termPokeTrace)}`, { cache: 'no-store' }).then((r) => r.json()),
-      fetch(`/api/live-pricecharting?q=${encodeURIComponent(termPriceCharting)}`, { cache: 'no-store' }).then((r) => r.json()),
-    ]).then(([pokeTraceRes, priceChartingRes]) => {
+    Promise.allSettled([...pokeTraceFetches, ...priceChartingFetches]).then((settled) => {
       const results = [];
-      if (pokeTraceRes.status === 'fulfilled' && !pokeTraceRes.value.error) {
-        for (const r of pokeTraceRes.value.results || []) results.push({ ...r, platform: 'eBay (PokeTrace)' });
-      }
-      if (priceChartingRes.status === 'fulfilled' && !priceChartingRes.value.error) {
-        for (const r of priceChartingRes.value.results || []) results.push({ name: r.name, set: r.set, platform: 'PriceCharting', pcUrl: r.url, confirmedSales: [] });
-      }
+      const seen = new Set();
+      const nPokeTrace = pokeTraceFetches.length;
+      settled.forEach((res, i) => {
+        if (res.status !== 'fulfilled' || res.value.error) return;
+        const isPokeTrace = i < nPokeTrace;
+        for (const r of res.value.results || []) {
+          const key = isPokeTrace ? `pt:${r.name}:${r.set}` : `pc:${r.name}:${r.set}`;
+          if (seen.has(key)) continue; // stesso risultato trovato da entrambe le ricerche, non ripeterlo
+          seen.add(key);
+          results.push(isPokeTrace
+            ? { ...r, platform: 'eBay (PokeTrace)' }
+            : { name: r.name, set: r.set, platform: 'PriceCharting', pcUrl: r.url, confirmedSales: [] });
+        }
+      });
       setLive({ status: 'ok', results, fetchedAt: new Date().toISOString(), error: null });
     }).catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
   }, [card.tcgdex_id]);
