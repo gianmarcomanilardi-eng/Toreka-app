@@ -1746,45 +1746,25 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
     // mai nulla, dato che le inserzioni eBay sono scritte in inglese
     const isJapaneseSourced = card.lang === 'ja' || !card.name_en;
     const baseName = card.name_en || extractEnglishSpeciesName(card.name) || card.name;
-    // per le carte di origine giapponese, aggiungo "Japanese" alla
-    // ricerca — altrimenti il motore cerca inserzioni generiche
-    // occidentali, non quelle della versione giapponese che esistono
-    // davvero su eBay ma sono descritte in modo diverso
-    const term = isJapaneseSourced ? `${baseName} Japanese` : (card.set_name ? `${baseName} ${card.set_name}` : baseName);
-    fetch(`/api/live-price?q=${encodeURIComponent(term)}`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => {
-        // controllo di sicurezza: se sappiamo il set di questa carta e
-        // PokeTrace risponde con un set chiaramente diverso, non è la
-        // stessa carta — meglio non mostrare nulla che mostrare una
-        // carta sbagliata spacciata per quella giusta (è successo con
-        // "Charizard Gold Star" che tornava con dati del Base Set)
-        // controllo di sicurezza più preciso: tolgo prima le parole
-        // generiche ("pokemon", "the", ecc.), poi richiedo che quello
-        // che resta combaci quasi per intero — non basta che una
-        // parola sola sia in comune (è successo con "Dragon" contro
-        // "Dragon Frontiers", due set VERI ma diversi, non lo stesso
-        // scritto in modo abbreviato)
-        const GENERIC_WORDS = new Set(["pokemon", "the", "tcg", "card", "cards"]);
-        const stripGeneric = (s) => s.toLowerCase().split(/\s+/).filter((w) => !GENERIC_WORDS.has(w)).join(" ");
-        const setLooksRelated = (r) => {
-          // per le carte di origine giapponese salto questo controllo:
-          // il nome del set salvato è in giapponese, non corrisponderà
-          // mai testualmente a quello che PokeTrace restituisce in
-          // inglese, anche quando il risultato è quello giusto
-          if (isJapaneseSourced) return true;
-          if (!card.set_name || !r.set) return true;
-          const a = stripGeneric(card.set_name);
-          const b = stripGeneric(r.set);
-          if (a === b) return true;
-          const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-          if (!shorter) return false;
-          return longer.includes(shorter) && shorter.length >= longer.length * 0.75;
-        };
-        const filteredResults = (data.results || []).filter(setLooksRelated);
-        setLive({ status: 'ok', results: filteredResults, fetchedAt: data.fetchedAt, error: null });
-      })
-      .catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
+    const termPokeTrace = isJapaneseSourced ? `${baseName} Japanese` : (card.set_name ? `${baseName} ${card.set_name}` : baseName);
+    const termPriceCharting = isJapaneseSourced ? `${baseName} Japanese` : baseName;
+
+    // prendo da PIÙ fonti insieme, senza scartare risultati per un
+    // controllo di somiglianza — ogni risultato mostra la sua fonte,
+    // chi guarda giudica da sé cosa è rilevante
+    Promise.allSettled([
+      fetch(`/api/live-price?q=${encodeURIComponent(termPokeTrace)}`, { cache: 'no-store' }).then((r) => r.json()),
+      fetch(`/api/live-pricecharting?q=${encodeURIComponent(termPriceCharting)}`, { cache: 'no-store' }).then((r) => r.json()),
+    ]).then(([pokeTraceRes, priceChartingRes]) => {
+      const results = [];
+      if (pokeTraceRes.status === 'fulfilled' && !pokeTraceRes.value.error) {
+        for (const r of pokeTraceRes.value.results || []) results.push({ ...r, platform: 'eBay (PokeTrace)' });
+      }
+      if (priceChartingRes.status === 'fulfilled' && !priceChartingRes.value.error) {
+        for (const r of priceChartingRes.value.results || []) results.push({ name: r.name, set: r.set, platform: 'PriceCharting', pcUrl: r.url, confirmedSales: [] });
+      }
+      setLive({ status: 'ok', results, fetchedAt: new Date().toISOString(), error: null });
+    }).catch((error) => setLive({ status: 'error', results: [], fetchedAt: null, error: error.message || String(error) }));
   }, [card.tcgdex_id]);
   const inColl = collection.includes(card.tcgdex_id);
   const matchesGradeFilter = (p) => gradeFilter === 'all' || (gradeFilter === 'graded' ? !!p.grade_company : !p.grade_company);
@@ -1864,20 +1844,30 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
           )}
         </div>
 
-        {live.status === 'ok' && live.results.slice(0, 1).map((r, i) => (
-          r.confirmedSales.length > 0 && (
-            <div key={i} style={{ marginTop: 16, background: C.ink2, border: `1px solid ${C.gold}55`, borderRadius: 14, padding: '10px 12px' }}>
-              <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1 }}>TROVATO DAL VIVO ORA (eBay, non ancora salvato)</div>
-              <div className="tk-body" style={{ color: C.paper, fontSize: 12, marginTop: 4 }}>{r.name}{r.set ? ` — ${r.set}` : ''}</div>
-              {r.confirmedSales.map((s, j) => (
-                <div key={j} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-                  <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5 }}>{s.gradeTier}</span>
-                  <span className="tk-mono" style={{ color: C.gold, fontSize: 13, fontWeight: 700 }}>{fmtFrom(s.price, s.currency, currency)}</span>
+        {live.status === 'ok' && live.results.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="tk-mono" style={{ color: C.gold, fontSize: 9.5, letterSpacing: 1, marginBottom: 6 }}>TROVATO DAL VIVO ORA (non ancora salvato — controlla tu la corrispondenza)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {live.results.map((r, i) => (
+                <div key={i} style={{ background: C.ink2, border: `1px solid ${C.gold}55`, borderRadius: 14, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <PlatformPill name={r.platform} />
+                    <span className="tk-body" style={{ color: C.paper, fontSize: 12 }}>{r.name}{r.set ? ` — ${r.set}` : ''}</span>
+                  </div>
+                  {r.confirmedSales && r.confirmedSales.length > 0 && r.confirmedSales.map((s, j) => (
+                    <div key={j} style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+                      <span className="tk-mono" style={{ color: C.mist, fontSize: 10.5 }}>{s.gradeTier}</span>
+                      <span className="tk-mono" style={{ color: C.gold, fontSize: 13, fontWeight: 700 }}>{fmtFrom(s.price, s.currency, currency)}</span>
+                    </div>
+                  ))}
+                  {r.pcUrl && (
+                    <a href={r.pcUrl} target="_blank" rel="noreferrer" className="tk-body" style={{ color: C.teal, fontSize: 10.5, marginTop: 5, display: 'block' }}>vedi prezzi su PriceCharting →</a>
+                  )}
                 </div>
               ))}
             </div>
-          )
-        ))}
+          </div>
+        )}
 
         <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
