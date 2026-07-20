@@ -1889,17 +1889,36 @@ function RealCardDetail({ card, onBack, currency, setCurrency, collection = [], 
             {state.status === 'loading' && <div className="tk-body" style={{ color: C.mist, fontSize: 11 }}>Carico...</div>}
             {state.status === 'ok' && confirmedSorted.length === 0 && <div className="tk-body" style={{ color: C.mist, fontSize: 10.5 }}>Nessuna ancora.</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {confirmedSorted.slice(0, 6).map((p) => (
-                <div key={p.id} style={{ background: C.ink2, border: `1px solid ${C.line}`, borderRadius: 8, padding: '7px 8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span className="tk-mono" style={{ color: C.paper, fontSize: 11.5, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-                    <span className="tk-mono" style={{ color: C.mist, fontSize: 9 }}>{p.grade_company ? `${p.grade_company} ${p.grade}` : 'raw'}</span>
-                    {p.observed_at && <span className="tk-body" style={{ color: C.mist, fontSize: 9 }}>{fmtDate(new Date(p.observed_at))}</span>}
-                  </div>
-                </div>
-              ))}
+             {confirmedSorted.slice(0, 6).map((p) => {
+  const Wrapper = p.url ? 'a' : 'div';
+  const wrapperProps = p.url
+    ? { href: p.url, target: '_blank', rel: 'noreferrer' }
+    : {};
+  return (
+    <Wrapper
+      key={p.id}
+      {...wrapperProps}
+      style={{
+        background: C.ink2,
+        border: `1px solid ${C.line}`,
+        borderRadius: 8,
+        padding: '7px 8px',
+        display: 'block',
+        textDecoration: 'none',
+        cursor: p.url ? 'pointer' : 'default',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span className="tk-mono" style={{ color: C.paper, fontSize: 11.5, fontWeight: 700 }}>{fmtFrom(p.price, p.currency, currency)}</span>
+        {p.url && <span className="tk-body" style={{ color: C.teal, fontSize: 9 }}>verifica su eBay →</span>}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+        <span className="tk-mono" style={{ color: C.mist, fontSize: 9 }}>{p.grade_company ? `${p.grade_company} ${p.grade}` : 'raw'}</span>
+        {p.observed_at && <span className="tk-body" style={{ color: C.mist, fontSize: 9 }}>{fmtDate(new Date(p.observed_at))}</span>}
+      </div>
+    </Wrapper>
+  );
+})}
             </div>
           </div>
           <div>
