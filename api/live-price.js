@@ -10,7 +10,9 @@ function normalizeName(s) {
   return (s || "")
     .toLowerCase()
     .replace(/\(japanese\)/g, "")
+    .replace(/\bjapanese\b/g, "")
     .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
